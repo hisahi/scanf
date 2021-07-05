@@ -812,7 +812,7 @@ got_f_result:
 #if SCANF_FAST_SCANSET
                 char mention[UCHAR_MAX + 1] = { 0 };
 #else
-                char *set, *settmp;
+                const unsigned char *set, *settmp;
 #endif
                 if (!maxlen) maxlen = (size_t)-1;
                 ++f;
@@ -848,6 +848,7 @@ got_f_result:
                     int found = 0;
                     settmp = set;
                     prev = 0;
+                    hyphen = 0;
                     while (settmp < f) {
                         c = *settmp++;
                         if (hyphen) {
@@ -865,7 +866,7 @@ got_f_result:
                             prev = c;
                     }
                     if (hyphen && next == '-') found = 1;
-                    if (!found) break;
+                    if (found == invert) break;
 #endif
                     if (!nostore) *outp++ = next;
                     next = getch(p);

@@ -29,8 +29,8 @@ All of these functions also have a v* variant that takes in a va_list.
 
 In addition to these, you can also find
 
-    int spscanf(const char **s, const char* format, ...);
-    int vspscanf(const char **s, const char* format, va_list arg);
+    int spscanf(const char **sp, const char* format, ...);
+    int vspscanf(const char **sp, const char* format, va_list arg);
 
 which take a const char ** and will update the pointer such that it points to
 the first conflicting character (or end of the string).
