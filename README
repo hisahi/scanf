@@ -1,0 +1,96 @@
+
+WORK IN PROGRESS!
+
+This is a freestanding implementation of scanf (the standard C library function
+for reading formatted input). It does not have any dependencies other than the
+C89 standard library, specifically the following headers:
+    <ctype.h>
+    <limits.h>
+    <stdarg.h>
+    <stddef.h>
+    <float.h> (optional)
+    <math.h> (optional)
+    <stdint.h> (optional, C99 only)
+
+The prototypes for the scanf functions are the same as in the standard:
+
+    int scanf(const char* format, ...);
+    int sscanf(const char *s, const char* format, ...);
+
+In addition, a function that takes in a function pointer is available:
+
+    int fctscanf(int (*getch)(void* data), void (*ungetch)(int c, void* data), void* data, const char* format, ...);
+
+All of these functions also have a v* variant that takes in a va_list.
+
+    int vscanf(const char* format, va_list arg);
+    int vsscanf(const char *s, const char* format, va_list arg);
+    int vfctscanf(int (*getch)(void* data), void (*ungetch)(int c, void* data), void* data, const char* format, va_list arg);
+
+In addition to these, you can also find
+
+    int spscanf(const char **s, const char* format, ...);
+    int vspscanf(const char **s, const char* format, va_list arg);
+
+which take a const char ** and will update the pointer such that it points to
+the first conflicting character (or end of the string).
+
+For scanf, two functions called getch_() and ungetch_() should be defined,
+the prototypes of which should be
+
+    int getch_(void);
+    void ungetch_(int);
+
+getch_ shall return an int that can be represented as an unsigned char
+(zero or positive) or a negative integral value that represents the end of file.
+
+ungetch_ shall push a character back into the stream such that the next getch_
+call will return the character pushed. ungetch_ will not be called more than
+once for every *scanf call.
+
+The functions given to (v)fctscanf shall function identically, except also take
+a parameter of type void * which will have the same value as passed to
+(v)fctscanf. ungetch may be left as NULL for (v)fctscanf in which case it will
+not be called.
+
+This implementation of scanf is intended to be completely standards-compliant
+and support all the same format specifiers as a standards-compliant
+implementation.
+
+Caveats:
+- Long length specifier for wide characters (%lc, %ls, %l[) is not supported.
+  Read in multibyte characters and use mbstowcs yourself.
+  Perhaps I'll implement (w)*scanf functions and support %l* only there.
+- The only supported locale is the C locale; no locale-specific formatting
+  is allowed.
+
+Defines:
+    SCANF_ATON_BUFFER_SIZE (default: 32)
+        Size of buffer allocated on the stack for reading integral
+        numbers for conversion into a string.
+    SCANF_ATOF_BUFFER_SIZE (default: 32)
+        Size of buffer allocated on the stack for reading floating point
+        numbers for conversion into a string.
+    SCANF_DISABLE_SUPPORT_FLOAT (default: undefined)
+        Define as 1 to disable floating-point support
+    SCANF_DISABLE_SUPPORT_LONG_LONG (default: 1, or undefined if C99)
+        Define as 1 to disable long long support
+    SCANF_ASCII (default: 1)
+        Define as 0 if some ASCII invariants (such as digits 0-9 and letters
+        A-F being consecutive characters) cannot be assumed
+    SCANF_NOMATH (default: undefined)
+        Define as 1 to remove math.h dependency (for pow), which is only needed
+        for floating-point support. SCANF_NOMATH has no effect if
+        SCANF_DISABLE_SUPPORT_FLOAT is defined to be true.
+    SCANF_INFINITE (default: 1 if C99 and SCANF_NOMATH not defined, else 0)
+        Define as 1 to enable INFINITY/NAN support. Macros called INFINITY
+        and NAN must be defined. SCANF_INFINITE has no effect if
+        SCANF_DISABLE_SUPPORT_FLOAT is defined to be true.
+    SCANF_FAST_SCANSET (default: 1 if CHAR_BIT == 8, else 0)
+        Makes scanset scanning faster but takes up more memory.
+
+To use this library, simply include scanf.h, compile and link scanf.c into
+your program and implement getch_ as documented above.
+
+Tests for scanf are included in the test program test-scanf.cc under the
+test folder.
