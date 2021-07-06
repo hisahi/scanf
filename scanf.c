@@ -545,6 +545,8 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
             /* nowread = characters read for this format specifier
                maxlen = maximum number of characters to be read "field width" */
             size_t nowread = 0, maxlen = 0;
+            /* where the value will be stored */
+            void *dst;
             /* length specifier (l, ll, h, hh...) */
             enum dlength dlen = LN_;
             
@@ -552,7 +554,12 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
             if (*f == '*') {
                 nostore = 1;
                 ++f;
-            }
+                dst = NULL;
+            } else
+                dst = va_arg(va, void *);
+                /* A pointer to any incomplete or object type may be converted
+                   to a pointer to void and back again; the result shall compare
+                   equal to the original pointer. */ 
 
             /* width specifier => maxlen */
             if (isdigit(*f)) {
@@ -758,79 +765,76 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     ++fields;
                 }
             storenum:
-                {
-                    /* store number, either as ptr, unsigned or signed */
-                    void *dst = va_arg(va, void *);
-                    if (isptr)
-                        STORE_VALUE(dst, r, void *);
-                    else if (unsign) {
-                        switch (dlen) {
-                        case LN_hh:
-                            STORE_VALUE(dst, r, unsigned char);
-                            break;
-                        case LN_h:
-                            STORE_VALUE(dst, r, unsigned short);
-                            break;
-                        case LN_l:
-                            STORE_VALUE(dst, r, unsigned long);
-                            break;
+                /* store number, either as ptr, unsigned or signed */
+                if (isptr)
+                    STORE_VALUE(dst, r, void *);
+                else if (unsign) {
+                    switch (dlen) {
+                    case LN_hh:
+                        STORE_VALUE(dst, r, unsigned char);
+                        break;
+                    case LN_h:
+                        STORE_VALUE(dst, r, unsigned short);
+                        break;
+                    case LN_l:
+                        STORE_VALUE(dst, r, unsigned long);
+                        break;
 #ifndef INTMAXT_ALIAS
-                        case LN_j:
-                            STORE_VALUE(dst, r, uintmax_t);
-                            break;
+                    case LN_j:
+                        STORE_VALUE(dst, r, uintmax_t);
+                        break;
 #endif
 #ifndef SIZET_ALIAS
-                        case LN_z:
-                            STORE_VALUE(dst, r, size_t);
-                            break;
+                    case LN_z:
+                        STORE_VALUE(dst, r, size_t);
+                        break;
 #endif
 #ifndef PTRDIFFT_ALIAS
-                        case LN_t:
-                            STORE_VALUE(dst, r, ptrdiff_t);
-                            break;
+                    case LN_t:
+                        STORE_VALUE(dst, r, ptrdiff_t);
+                        break;
 #endif
 #if !SCANF_DISABLE_SUPPORT_LONG_LONG
-                        case LN_ll:
-                            STORE_VALUE(dst, r, unsigned long long);
-                            break;
+                    case LN_ll:
+                        STORE_VALUE(dst, r, unsigned long long);
+                        break;
 #endif
-                        default:
-                            STORE_VALUE(dst, r, unsigned);
-                        }
-                    } else {
-                        switch (dlen) {
-                        case LN_hh:
-                            STORE_VALUE(dst, r, signed char);
-                            break;
-                        case LN_h:
-                            STORE_VALUE(dst, r, short);
-                            break;
-                        case LN_l:
-                            STORE_VALUE(dst, r, long);
-                            break;
+                    default:
+                        STORE_VALUE(dst, r, unsigned);
+                    }
+                } else {
+                    switch (dlen) {
+                    case LN_hh:
+                        STORE_VALUE(dst, r, signed char);
+                        break;
+                    case LN_h:
+                        STORE_VALUE(dst, r, short);
+                        break;
+                    case LN_l:
+                        STORE_VALUE(dst, r, long);
+                        break;
 #ifndef INTMAXT_ALIAS
-                        case LN_j:
-                            STORE_VALUE(dst, r, intmax_t);
-                            break;
+                    case LN_j:
+                        STORE_VALUE(dst, r, intmax_t);
+                        break;
 #endif
 #ifndef SIZET_ALIAS
-                        case LN_z:
-                            STORE_VALUE(dst, r, size_t);
-                            break;
+                    case LN_z:
+                        STORE_VALUE(dst, r, size_t);
+                        break;
 #endif
 #ifndef PTRDIFFT_ALIAS
-                        case LN_t:
-                            STORE_VALUE(dst, r, ptrdiff_t);
-                            break;
+                    case LN_t:
+                        STORE_VALUE(dst, r, ptrdiff_t);
+                        break;
 #endif
 #if !SCANF_DISABLE_SUPPORT_LONG_LONG
-                        case LN_ll:
-                            STORE_VALUE(dst, r, long long);
-                            break;
+                    case LN_ll:
+                        STORE_VALUE(dst, r, long long);
+                        break;
 #endif
-                        default:
-                            STORE_VALUE(dst, r, int);
-                        }
+                    default:
+                        STORE_VALUE(dst, r, int);
                     }
                 }
                 break;
@@ -992,28 +996,25 @@ got_f_result:
                 if (nostore)
                     break;
                 ++fields;
-                {
-                    void *dst = va_arg(va, void *);
-                    switch (dlen) {
-                    case LN_l:
-                        STORE_VALUE(dst, r, double);
-                        break;
-                    case LN_L:
-                        STORE_VALUE(dst, r, long double);
-                        break;
-                    default:
-                        STORE_VALUE(dst, r, float);
-                    }
+                switch (dlen) {
+                case LN_l:
+                    STORE_VALUE(dst, r, double);
+                    break;
+                case LN_L:
+                    STORE_VALUE(dst, r, long double);
+                    break;
+                default:
+                    STORE_VALUE(dst, r, float);
                 }
             } /* =========== READ FLOAT =========== */
                 break;
 #endif
             case 'c': 
             { /* =========== READ CHAR =========== */
-                char *outp = nostore ? (char *)NULL : va_arg(va, char *);
+                char *outp = (char *)dst;
                 if (!maxlen) maxlen = 1;
                 while (KEEP_READING()) {
-                    if (!nostore) *outp++ = next;
+                    if (!nostore) *outp++ = (char)(unsigned char)next;
                     NEXT_CHAR(nowread);
                 }
                 if (nowread < maxlen)
@@ -1024,7 +1025,7 @@ got_f_result:
                 break;
             case 's': 
             { /* =========== READ STR =========== */
-                char *outp = nostore ? (char *)NULL : va_arg(va, char *);
+                char *outp = (char *)dst;
                 if (!maxlen)
 #if SCANF_SECURE
                     MATCH_FAILURE();
@@ -1033,13 +1034,13 @@ got_f_result:
 #endif
 
                 while (KEEP_READING() && !isspace(next)) {
-                    if (!nostore) *outp++ = next;
+                    if (!nostore) *outp++ = (char)(unsigned char)next;
                     NEXT_CHAR(nowread);
                 }
                 if (!nowread)
                     MATCH_FAILURE();
                 if (!nostore) {
-                    *outp++ = 0;
+                    *outp = 0;
                     ++fields;
                 }
                 MATCH_SUCCESS();
@@ -1047,7 +1048,7 @@ got_f_result:
                 break;
             case '[':
             { /* =========== READ SCANSET =========== */
-                char *outp = nostore ? (char *)NULL : va_arg(va, char *);
+                char *outp = (char *)dst;
                 BOOL hyphen = 0, invert = 0;
                 unsigned char prev = 0, c;
 #if SCANF_FAST_SCANSET
@@ -1115,11 +1116,11 @@ got_f_result:
                     if (hyphen && next == '-') found = 1;
                     if (found == invert) break;
 #endif
-                    if (!nostore) *outp++ = next;
+                    if (!nostore) *outp++ = (char)(unsigned char)next;
                     NEXT_CHAR(nowread);
                 }
                 if (!nostore) {
-                    *outp++ = 0;
+                    *outp = 0;
                     ++fields;
                 }
                 MATCH_SUCCESS();
