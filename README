@@ -72,9 +72,12 @@ Caveats:
   is allowed.
 
 Defines:
-    SCANF_ATON_BUFFER_SIZE (default: 32)
+    SCANF_ATON_BUFFER_SIZE (default: 72 if SCANF_BINARY, else 32)
         Size of buffer allocated on the stack for reading integral
-        numbers for conversion into a string.
+        numbers (through %i, %d, %u, %o, %x) for conversion into a string.
+    SCANF_ATOD_BUFFER_SIZE (default: 32)
+        Same as SCANF_ATON_BUFFER_SIZE, but used only for decimal numbers
+        (floating point exponent as well as field width).
     SCANF_ATOF_BUFFER_SIZE (default: 48)
         Size of buffer allocated on the stack for reading floating point
         numbers for conversion into a string.

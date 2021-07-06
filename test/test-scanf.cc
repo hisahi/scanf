@@ -444,6 +444,8 @@ bool tests_ok() {
     TRY_TEST("scanset maxlen",
         2, 4, "39abc", "%2[0-9]%2[a-b]", buf_str<20>("39"), buf_str<20>("ab"));
 
+#if !SCANF_DISABLE_SUPPORT_FLOAT
+
     TRY_TEST("%f",
         1, 3, "2.5", "%f", float(2.5f));
 
@@ -509,6 +511,8 @@ bool tests_ok() {
         1, 9, "nan(0123)", "%f", float(NAN));
 #endif
 
+#endif
+
     TRY_TEST("%p",
         1, 6, "0x01ff", "%p", (void *)0x01ff);
 
@@ -529,6 +533,16 @@ bool tests_ok() {
 
     TRY_TEST("literal with whitespace on both",
         1, 5, " abc3", " abc%d", int(3));
+
+    TRY_TEST("hours:minutes:seconds",
+        3, 8, "02:50:09", "%d:%d:%d", int(2), int(50), int(9));
+
+    TRY_TEST("whitespace test 1",
+        3, 10, "abc de 123", "%3c%3c%d",
+            buf_char<3>("abc"), buf_char<3>(" de"), int(123));
+
+    TRY_TEST("whitespace test 2",
+        2, 3, "a b", "%c\n\n%c", char('a'), char('b'));
 
     TRY_TEST("%n on empty",
         0, 0, "", "%n", int(0));
@@ -552,18 +566,10 @@ bool tests_ok() {
         2, 12, "  abc      2bb", "%s%n%d%n",
             buf_str<3>("abc"), int(5), int(2), int(12));
 
+#if !SCANF_DISABLE_SUPPORT_FLOAT
+
     TRY_TEST("%n after %f",
         1, 6, "-75e-2q", "%f%n", float(-0.75f), int(6));
-
-    TRY_TEST("hours:minutes:seconds",
-        3, 8, "02:50:09", "%d:%d:%d", int(2), int(50), int(9));
-
-    TRY_TEST("whitespace test 1",
-        3, 10, "abc de 123", "%3c%3c%d",
-            buf_char<3>("abc"), buf_char<3>(" de"), int(123));
-
-    TRY_TEST("whitespace test 2",
-        2, 3, "a b", "%c\n\n%c", char('a'), char('b'));
 
     TRY_TEST("C99 example 1",
         3, 20, "25 54.32E-1 thompson", "%d%f%s",
@@ -589,6 +595,8 @@ bool tests_ok() {
     TRY_TEST("C99 example 3d",
         0, 4, "100ergs of energy", "%f%20s of %20s",
             float(0), buf_str<21>(), buf_str<21>());
+
+#endif
 
     TRY_TEST("C99 example 4",
         1, 3, "123", "%d%n%n%d", int(123), int(3), int(3), int(0));
