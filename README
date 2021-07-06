@@ -62,10 +62,12 @@ storage), nor does it require any dynamic allocations (malloc). Primary focus is
 on portability and robustness, while secondary focus is on maximizing
 performance and minimizing code size.
 
-Caveats:
+Known caveats:
 - Long length specifier for wide characters (%lc, %ls, %l[) is not supported.
   Read in multibyte characters and use mbstowcs yourself.
-  Perhaps I'll implement *wscanf functions and support %l* only there.
+  At some point if there is enough demand, I'll probably implement a
+  wscanf.c/wscanf.h that comes with wide functions (w*) as well as multibyte
+  ones, but requires more functions (getwch_, ungetwch_, mbrtowc_, wcrtomb_)
 - Long floating point numbers might not be converted correctly if they do not
   fit into the buffer.
 - The only supported locale is the C locale; no locale-specific formatting
@@ -76,15 +78,6 @@ your program and implement getch_ and ungetch_ as documented above. You may
 also want to look at the defines below to customize your build.
 
 Defines:
-    SCANF_ATON_BUFFER_SIZE (default: 72 if SCANF_BINARY, else 32)
-        Size of buffer allocated on the stack for reading integral
-        numbers (through %i, %d, %u, %o, %x) for conversion into a string.
-    SCANF_ATOD_BUFFER_SIZE (default: 32)
-        Same as SCANF_ATON_BUFFER_SIZE, but used only for decimal numbers
-        (floating point exponent as well as field width).
-    SCANF_ATOF_BUFFER_SIZE (default: 48)
-        Size of buffer allocated on the stack for reading floating point
-        numbers for conversion into a string.
     SCANF_DISABLE_SUPPORT_FLOAT (default: undefined)
         Define as 1 to disable floating-point support
     SCANF_DISABLE_SUPPORT_LONG_LONG (default: 1, or undefined if C99)
@@ -106,18 +99,30 @@ Defines:
         Define as 0 to use pow() from <math.h>. Has no effect is SCANF_NOMATH
         or SCANF_DISABLE_SUPPORT_FLOAT is defined to be true.
         Setting SCANF_NOPOW to 0 may speed up conversions to float.
+    SCANF_LOGN_POW (default: 1)
+        Uses a O(log(n)) integer power algorithm instead of O(n).
+        Should almost always work, but define to 0 if it causes issues.
     SCANF_INFINITE (default: 1 if C99 and SCANF_NOMATH not defined, else 0)
         Define as 1 to enable INFINITY/NAN support. Macros called INFINITY
         and NAN must be defined. SCANF_INFINITE has no effect if
         SCANF_DISABLE_SUPPORT_FLOAT is defined to be true.
     SCANF_FAST_SCANSET (default: 1 if CHAR_BIT == 8, else 0)
         Makes scanset scanning faster but takes up more memory.
+    SCANF_BINARY (default: 1)
+        Adds a new custom formatter %b for binary numbers. You should consider
+        increasing SCANF_ATON_BUFFER_SIZE if setting this to 1.
     SCANF_SECURE (default: 0)
         Triggers a read failure if a %s or %[ format specifier does not specify
         a maximum length/width.
-    SCANF_BINARY (default: 0)
-        Adds a new custom formatter %b for binary numbers. You should consider
-        increasing SCANF_ATON_BUFFER_SIZE if setting this to 1.
+    SCANF_ATON_BUFFER_SIZE (default: 72 if SCANF_BINARY, else 32)
+        Size of buffer allocated on the stack for reading integral
+        numbers (through %i, %d, %u, %o, %x) for conversion into a string.
+    SCANF_ATOD_BUFFER_SIZE (default: 32)
+        Same as SCANF_ATON_BUFFER_SIZE, but used only for decimal numbers
+        (floating point exponent as well as field width).
+    SCANF_ATOF_BUFFER_SIZE (default: 48)
+        Size of buffer allocated on the stack for reading floating point
+        numbers for conversion into a string.
 
 Tests for scanf are included in the test program test-scanf.cc under the
 test folder.

@@ -127,7 +127,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 
 #ifndef SCANF_BINARY
-#define SCANF_BINARY 0
+#define SCANF_BINARY 1
 #endif
 
 #ifndef SCANF_ATON_BUFFER_SIZE
@@ -162,21 +162,25 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define SCANF_NOPOW 1
 #endif
 
+#ifndef SCANF_LOGN_POW
+#define SCANF_LOGN_POW 1
+#endif
+
 #if !SCANF_ASCII
 #undef SCANF_INTERNAL_CTYPE
 #define SCANF_INTERNAL_CTYPE 0
 #endif
 
-#if !SCANF_NOMATH
-#include <math.h>
+#if !SCANF_INTERNAL_CTYPE
+#include <ctype.h>
 #endif
 
 #if !SCANF_DISABLE_SUPPORT_FLOAT
 #include <float.h>
 #endif
 
-#if !SCANF_INTERNAL_CTYPE
-#include <ctype.h>
+#if !SCANF_NOMATH
+#include <math.h>
 #endif
 
 #ifndef SCANF_INFINITE
@@ -229,6 +233,49 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #elif (defined(LONG_MAX) && INTMAX_MAX == LONG_MAX && INTMAX_MIN == LONG_MIN)  \
     && (defined(ULONG_MAX) && UINTMAX_MAX == ULONG_MAX)
 #define INTMAXT_ALIAS l
+#endif
+#endif
+
+/* check if short == int */
+#if defined(INT_MIN) && defined(SHRT_MIN) && INT_MIN == SHRT_MIN               \
+ && defined(INT_MAX) && defined(SHRT_MAX) && INT_MAX == SHRT_MAX               \
+ && defined(UINT_MAX) && defined(USHRT_MAX) && UINT_MAX == USHRT_MAX
+#define SHORT_IS_INT 1
+#endif
+
+/* check if long == int */
+#if defined(INT_MIN) && defined(LONG_MIN) && INT_MIN == LONG_MIN               \
+ && defined(INT_MAX) && defined(LONG_MAX) && INT_MAX == LONG_MAX               \
+ && defined(UINT_MAX) && defined(ULONG_MAX) && UINT_MAX == ULONG_MAX
+#define LONG_IS_INT 1
+#endif
+
+/* check if long long == long */
+#if defined(LONG_MIN) && defined(LLONG_MIN) && LONG_MIN == LLONG_MIN           \
+ && defined(LONG_MAX) && defined(LLONG_MAX) && LONG_MAX == LLONG_MAX           \
+ && defined(ULONG_MAX) && defined(ULLONG_MAX) && ULONG_MAX == ULLONG_MAX
+#define LLONG_IS_LONG 1
+#endif
+
+#if !SCANF_DISABLE_SUPPORT_FLOAT
+/* check if double == float */
+#if defined(FLT_MANT_DIG) && defined(DBL_MANT_DIG)                             \
+                  && FLT_MANT_DIG == DBL_MANT_DIG                              \
+ && defined(FLT_MIN_EXP) && defined(DBL_MIN_EXP)                               \
+                  && FLT_MIN_EXP == DBL_MIN_EXP                                \
+ && defined(FLT_MAX_EXP) && defined(DBL_MAX_EXP)                               \
+                  && FLT_MAX_EXP == DBL_MAX_EXP
+#define DOUBLE_IS_FLOAT 1
+#endif
+
+/* check if long double == double */
+#if defined(DBL_MANT_DIG) && defined(LDBL_MANT_DIG)                            \
+                  && DBL_MANT_DIG == LDBL_MANT_DIG                             \
+ && defined(DBL_MIN_EXP) && defined(LDBL_MIN_EXP)                              \
+                  && DBL_MIN_EXP == LDBL_MIN_EXP                               \
+ && defined(DBL_MAX_EXP) && defined(LDBL_MAX_EXP)                              \
+                  && DBL_MAX_EXP == LDBL_MAX_EXP
+#define LDOUBLE_IS_DOUBLE 1
 #endif
 #endif
 
@@ -438,23 +485,23 @@ INLINE intmax_t atobn_(const unsigned char* s, BOOL negative, int b,
 #if !SCANF_DISABLE_SUPPORT_FLOAT
 
 #if !SCANF_NOPOW
-INLINE maxfloat_t pow10_(intmax_t y) {
-    return pow(10, y);
+INLINE maxfloat_t powi_(maxfloat_t x, intmax_t y) {
+    return pow(x, y);
 }
-INLINE maxfloat_t pow2_(intmax_t y) {
-    return pow(2, y);
-}
-#else
-INLINE maxfloat_t pow10_(intmax_t y) {
+#elif SCANF_LOGN_POW
+INLINE maxfloat_t powi_(maxfloat_t x, intmax_t y) {
     maxfloat_t r = (maxfloat_t)1;
-    for (; y > 0; --y)
-        r *= 10;
+    for (; y > 0; y >>= 1) {
+        if (y & 1) r *= x;
+        x *= x;
+    }
     return r;
 }
-INLINE maxfloat_t pow2_(intmax_t y) {
+#else
+INLINE maxfloat_t powi_(maxfloat_t x, intmax_t y) {
     maxfloat_t r = (maxfloat_t)1;
     for (; y > 0; --y)
-        r *= 2;
+        r *= x;
     return r;
 }
 #endif
@@ -481,12 +528,12 @@ static maxfloat_t atolf_(const unsigned char* s, BOOL negative, intmax_t exp,
                 r = INFINITY;
             else
 #endif
-                r *= (hex ? pow2_(exp) : pow10_(exp));
+                r *= (hex ? powi_(2, exp) : powi_(10, exp));
         } else if (exp < 0) {
             if (exp < (hex ? LDBL_MIN_EXP : LDBL_MIN_10_EXP))
                 r = 0;
             else
-                r /= (hex ? pow2_(-exp) : pow10_(-exp));
+                r /= (hex ? powi_(2, -exp) : powi_(10, -exp));
         }
     }
     if (negative) r = -r;
@@ -785,14 +832,12 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                         if (unsign) STORE_DST(r, unsigned char);
                         else        STORE_DST(r, signed char);
                         break;
-                    case LN_h:
+#if !SHORT_IS_INT
+                    case LN_h: /* if SHORT_IS_INT, match fails => default: */
                         if (unsign) STORE_DST(r, unsigned short);
                         else        STORE_DST(r, short);
                         break;
-                    case LN_l:
-                        if (unsign) STORE_DST(r, unsigned long);
-                        else        STORE_DST(r, long);
-                        break;
+#endif
 #ifndef INTMAXT_ALIAS
                     case LN_j:
                         if (unsign) STORE_DST(r, uintmax_t);
@@ -811,8 +856,16 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
 #endif
 #if !SCANF_DISABLE_SUPPORT_LONG_LONG
                     case LN_ll:
+#if !LLONG_IS_LONG
                         if (unsign) STORE_DST(r, unsigned long long);
                         else        STORE_DST(r, long long);
+                        break;
+#endif
+#endif
+                    case LN_l:
+#if !LONG_IS_INT
+                        if (unsign) STORE_DST(r, unsigned long);
+                        else        STORE_DST(r, long);
                         break;
 #endif
                     default:
@@ -980,12 +1033,16 @@ got_f_result:
                     break;
                 ++fields;
                 switch (dlen) {
-                case LN_l:
-                    STORE_DST(r, double);
-                    break;
                 case LN_L:
+#if !LDOUBLE_IS_DOUBLE
                     STORE_DST(r, long double);
                     break;
+#endif
+                case LN_l:
+#if !DOUBLE_IS_FLOAT
+                    STORE_DST(r, double);
+                    break;
+#endif
                 default:
                     STORE_DST(r, float);
                 }
