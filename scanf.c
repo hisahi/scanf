@@ -825,6 +825,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 intmax_t exp = 0;
                 int base = 10, k;
                 unsigned char explc = 'e', expuc = 'E';
+                size_t leftover = 0;
                 /* negative? found zero? allow dot? */
                 BOOL negative = 0, zero = 0, dot = 0;
                 if (!maxlen) maxlen = (size_t)-1;
@@ -900,6 +901,8 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                                     || (!dot && next == '.'));) {
                     if (k < SCANF_ATOF_BUFFER_SIZE - 1)
                         *di++ = next, ++k;
+                    else if (!dot)
+                        ++leftover;
                     if (next == '.')
                         dot = 1;
                     NEXT_CHAR(nowread);
@@ -947,15 +950,9 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                         exp = atobn_(aton, eneg, 10, INTMAX_MIN, INTMAX_MAX);
                 }
 
-                /* TODO if !dot && k >= SCANF_ATOF_BUFFER_SIZE - 1,
-                   there's probably an overflow or similar as the integer
-                   part is too long, but the exponent may fix it.
-                   maybe we should do the conversion in parts?
-                   for now, let us adjust the exp if that happens */
-                if (!dot && k >= SCANF_ATOF_BUFFER_SIZE - 1) {
+                if (leftover) {
                     intmax_t oexp = exp;
-                    exp += (k - SCANF_ATOF_BUFFER_SIZE - 2)
-                            * (base == 16 ? 4 : 1);
+                    exp += leftover * (base == 16 ? 4 : 1);
                     if (exp < oexp) exp = INTMAX_MAX; /* overflow protection */
                 }
 
