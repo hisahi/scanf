@@ -76,6 +76,16 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define INLINE static
 #endif
 
+#ifndef BOOL
+#if defined(__cplusplus)
+#define BOOL bool
+#elif SCANF_C99
+#define BOOL _Bool
+#else
+#define BOOL int
+#endif
+#endif
+
 #ifndef SCANF_ATON_BUFFER_SIZE
 #define SCANF_ATON_BUFFER_SIZE 32
 #endif
@@ -147,7 +157,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define EOF -1
 #endif
 
-INLINE_IF_ASCII int ctodn_(const char c) {
+INLINE_IF_ASCII int ctodn_(int c) {
 #if SCANF_ASCII
     return c - '0';
 #else
@@ -167,7 +177,7 @@ INLINE_IF_ASCII int ctodn_(const char c) {
 #endif
 }
 
-INLINE_IF_ASCII int ctoon_(const char c) {
+INLINE_IF_ASCII int ctoon_(int c) {
 #if SCANF_ASCII
     return c - '0';
 #else
@@ -185,7 +195,7 @@ INLINE_IF_ASCII int ctoon_(const char c) {
 #endif
 }
 
-static int ctoxn_(const char c) {
+static int ctoxn_(int c) {
 #if SCANF_ASCII
     if (c >= 'a')
         return c - 'a' + 10;
@@ -216,7 +226,7 @@ static int ctoxn_(const char c) {
 }
 
 #if SCANF_BINARY
-INLINE_IF_ASCII int ctobn_(const char c) {
+INLINE_IF_ASCII int ctobn_(int c) {
 #if SCANF_ASCII
     return c - '0';
 #else
@@ -229,7 +239,7 @@ INLINE_IF_ASCII int ctobn_(const char c) {
 }
 #endif
 
-static int ctorn_(const char c, int b) {
+static int ctorn_(int c, int b) {
     switch (b) {
     case 8:
         return ctoon_(c);
@@ -278,7 +288,7 @@ INLINE int tolower(int c) {
 
 #endif
 
-INLINE int isdigo_(const char c) {
+INLINE int isdigo_(int c) {
 #if SCANF_ASCII
     return '0' <= c && c <= '7';
 #else
@@ -286,7 +296,7 @@ INLINE int isdigo_(const char c) {
 #endif
 }
 
-INLINE int isdigx_(const char c) {
+INLINE int isdigx_(int c) {
 #if SCANF_ASCII
     return isdigit(c) || ('A' <= c && c <= 'F') || ('a' <= c && c <= 'f');
 #else
@@ -295,12 +305,12 @@ INLINE int isdigx_(const char c) {
 }
 
 #if SCANF_BINARY
-INLINE int isdigb_(const char c) {
+INLINE int isdigb_(int c) {
     return c == '0' || c == '1';
 }
 #endif
 
-INLINE int isdigr_(const char c, int b) {
+INLINE int isdigr_(int c, int b) {
     switch (b) {
     case 8:
         return isdigo_(c);
@@ -315,7 +325,7 @@ INLINE int isdigr_(const char c, int b) {
     }
 }
 
-static uintmax_t atobn_(const char* s, int b) {
+static uintmax_t atobn_(const unsigned char* s, int b) {
     char c;
     uintmax_t r = 0, pr = 0;
     while ((c = *s++)) {
@@ -352,7 +362,7 @@ INLINE maxfloat_t pow2_(intmax_t y) {
 }
 #endif
 
-static maxfloat_t atolf_(const char* s, int negative, intmax_t exp) {
+static maxfloat_t atolf_(const unsigned char* s, int negative, intmax_t exp) {
     maxfloat_t r = 0;
     while (isdigit(*s))
         r = r * 10 + ctodn_(*s++);
@@ -379,7 +389,7 @@ static maxfloat_t atolf_(const char* s, int negative, intmax_t exp) {
     return r;
 }
 
-static maxfloat_t atoxlf_(const char* s, int negative, intmax_t exp) {
+static maxfloat_t atoxlf_(const unsigned char* s, int negative, intmax_t exp) {
     maxfloat_t r = 0;
     while (isdigit(*s))
         r = r * 16 + ctoxn_(*s++);
@@ -417,24 +427,33 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                    void* p, const char* ff, va_list va) {
     /* fields = number of fields successfully read; this is the return value */
     /* next = the "next" character to be processed, initially -1 */
-    int fields = 0, next = EOF;
+    int fields = 0, next;
     /* total characters read, returned by %n */
     size_t read_chars = 0;
+    /* whether we even tried to convert anything */
+    BOOL tryconv = 0;
+    /* whether we have failed to convert anything successfully.
+       match = 0 means matching failure, match = 1 means EOF / input failure
+                                                (before any conversion) */
+    BOOL match = 1;
     const unsigned char *f = (const unsigned char *)ff;
     unsigned char c;
+
+    /* empty format string always returns 0 */
+    if (!*f) return 0;
+
+    /* read and cache first character */
+    next = getch(p);
+    /* ++read_chars; intentionally left out, otherwise %n is off by 1 */
     while ((c = *f++)) {
-        if (IS_EOF(next)) {
-            /* read and cache first character */
-            next = getch(p);
-            if (GOT_EOF()) return EOF;
-            /* ++read_chars; intentionally left out, otherwise %n is off by 1 */
-        }
         if (c == '%') {
             /* nostore is %*, prevents a value from being stored */
-            int nostore = 0;
+            BOOL nostore = 0;
             /* nowread = characters read for this format specifier
                maxlen = maximum number of characters to be read "field width" */
             size_t nowread = 0, maxlen = 0;
+            /* signal match failure */
+#define MATCH_FAILURE() do { if (!GOT_EOF()) match = 0; } while (0)
             /* still characters to read? (not EOF and width not exceeded) */
 #define KEEP_READING() (nowread < maxlen && !GOT_EOF())
             /* length specifier (l, ll, h, hh...) */
@@ -448,7 +467,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
 
             /* width specifier => maxlen */
             if (isdigit(*f)) {
-                char aton[SCANF_ATON_BUFFER_SIZE], *di = aton;
+                unsigned char aton[SCANF_ATON_BUFFER_SIZE], *di = aton;
                 int k;
                 while (*f == '0')
                     ++f;
@@ -491,29 +510,31 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
             }
 
             switch (*f) {
-            /* do not skip whitespace for... */
-            case '[':
-            case 'c':
-            case 'n':
-            /* case '%': */
-                break;
             default:
                 /* skip whitespace. include in %n, but not elsewhere */
                 while (!GOT_EOF() && isspace(next)) {
                     next = getch(p);
                     ++read_chars;
                 }
+            /* do not skip whitespace for... */
+            case '[':
+            case 'c':
+            /* case '%': */
+                tryconv = 1;
+                if (GOT_EOF()) goto read_failure;
+            /* do not check EOF... */
+            case 'n':
+                break;
             }
-
-            if (GOT_EOF())
-                goto read_failure;
 
             /* format */
             switch (*f) {
             case '%': 
                 /* literal % */
-                if (next != '%')
+                if (next != '%') {
+                    MATCH_FAILURE();
                     goto read_failure;
+                }
                 next = getch(p);
                 ++read_chars;
                 break;
@@ -525,8 +546,10 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     next = getch(p);
                     ++nowread;
                     for (k = 0; k < 4; ++k) {
-                        if (!KEEP_READING() || next != rest[k])
+                        if (!KEEP_READING() || next != rest[k]) {
+                            MATCH_FAILURE();
                             goto read_failure;
+                        }
                         next = getch(p);
                         ++nowread;
                     }
@@ -534,6 +557,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                         ++fields;
                         *(va_arg(va, void **)) = NULL;
                     }
+                    match = 0;
                     break;
                 }
                 /* fall-through */
@@ -548,17 +572,17 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
 #endif
             {
                 intmax_t r = 0;
-                /* had minus? */
-                int negative = 0;
-                /* allow empty = zero? */
-                int zero = 0;
                 /* decimal, hexadecimal, binary */
                 int base;
+                /* had minus? */
+                BOOL negative = 0;
+                /* allow empty = zero? */
+                BOOL zero = 0;
                 /* unsigned? */
-                int unsign;
+                BOOL unsign;
                 /* %p? */
-                int isptr;
-                char aton[SCANF_ATON_BUFFER_SIZE], *di = aton;
+                BOOL isptr;
+                unsigned char aton[SCANF_ATON_BUFFER_SIZE], *di = aton;
                 int k;
                 if (!maxlen) maxlen = (size_t)-1;
                 c = *f;
@@ -605,13 +629,12 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 /* detect base from string for %i, skip 0x for %x,
                                                    demand 0x for %p */
                 if (c == 'i' || c == 'x' || c == 'X' || c == 'p') {
-                    int notfoundhex = isptr;
+                    BOOL notfoundhex = isptr;
                     if (KEEP_READING() && next == '0') {
                         zero = 1;
                         next = getch(p);
                         ++nowread;
-                        if (KEEP_READING() && (next == 'x'
-                                                 || next == 'X')) {
+                        if (KEEP_READING() && (next == 'x' || next == 'X')) {
                             base = 16;
                             next = getch(p);
                             notfoundhex = 0;
@@ -620,8 +643,10 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                             base = 8;
                         }
                     }
-                    if (notfoundhex)
+                    if (notfoundhex) {
+                        MATCH_FAILURE();
                         goto read_failure;
+                    }
                 }
                 /* skip initial zeros */
                 while (KEEP_READING() && next == '0') {
@@ -638,9 +663,10 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 }
                 *di++ = 0;
                 /* if buffer empty, could not read */
-                if (!*aton && !zero)
+                if (!*aton && !zero) {
+                    MATCH_FAILURE();
                     goto read_failure;
-                else if (!*aton)
+                } else if (!*aton)
                     r = 0;
                 /* too many digits, overflow! */
                 else if (k >= SCANF_ATON_BUFFER_SIZE - 1)
@@ -652,7 +678,6 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     ++fields;
                     if (isptr) {
                         *(va_arg(va, void **)) = (void *)r;
-                        break;
                     } else if (unsign) {
                         switch (dlen) {
                         case LN_hh:
@@ -712,6 +737,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                         }
                     }
                 }
+                match = 0;
             }
                 break;
             case 'e': case 'E': /* scientific format float */
@@ -721,13 +747,15 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 /* all treated equal by scanf, but not by printf */
 #if SCANF_DISABLE_SUPPORT_FLOAT
                 /* no support here */
+                MATCH_FAILURE();
                 goto read_failure;
 #else
             {
                 maxfloat_t r;
-                char atof[SCANF_ATOF_BUFFER_SIZE], *di = atof;
+                unsigned char atof[SCANF_ATOF_BUFFER_SIZE], *di = atof;
                 intmax_t exp = 0;
-                int negative = 0, base = 10, dot = 0, zero = 0, k;
+                int base = 10, k;
+                BOOL negative = 0, dot = 0, zero = 0;
                 if (!maxlen) maxlen = (size_t)-1;
                 
                 switch (next) {
@@ -746,8 +774,10 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     ++nowread;
                     for (k = 0; k < 2; ++k) {
                         if (!KEEP_READING() ||
-                                (next != rest[k] && next != tolower(rest[k])))
+                                (next != rest[k] && next != tolower(rest[k]))) {
+                            MATCH_FAILURE();
                             goto read_failure;
+                        }
                         next = getch(p);
                         ++nowread;
                     }
@@ -759,8 +789,10 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                                 next = getch(p);
                                 ++nowread;
                                 break;
-                            } else if (next != '_' && !isalnum(next))
+                            } else if (next != '_' && !isalnum(next)) {
+                                MATCH_FAILURE();
                                 goto read_failure;
+                            }
                         }
                     }
 
@@ -773,8 +805,10 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     ++nowread;
                     for (k = 0; k < 2; ++k) {
                         if (!KEEP_READING() ||
-                                (next != rest[k] && next != tolower(rest[k])))
+                                (next != rest[k] && next != tolower(rest[k]))) {
+                            MATCH_FAILURE();
                             goto read_failure;
+                        }
                         next = getch(p);
                         ++nowread;
                     }
@@ -822,8 +856,10 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 }
                 *di++ = 0;
                 /* float cannot just be a decimal point! */
-                if (dot && k == 1)
+                if (dot && k == 1) {
+                    MATCH_FAILURE();
                     goto read_failure;
+                }
 
                 /* TODO if !dot && k >= SCANF_ATOF_BUFFER_SIZE - 1,
                    there's probably an overflow or similar as the integer
@@ -831,16 +867,18 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                    maybe we should do the conversion in parts? */
 
                 /* if buffer empty, could not read */
-                if (!*atof && !zero)
+                if (!*atof && !zero) {
+                    MATCH_FAILURE();
                     goto read_failure;
+                }
 
                 /* exponent? */
                 if (KEEP_READING()
                              && ((base == 16 && (next == 'p' || next == 'P'))
                              || (base == 10 && (next == 'e' || next == 'E')))) {
                     uintmax_t re = 0;
-                    int eneg = 0;
-                    char aton[SCANF_ATON_BUFFER_SIZE], *edi = aton;
+                    BOOL eneg = 0;
+                    unsigned char aton[SCANF_ATON_BUFFER_SIZE], *edi = aton;
                     next = getch(p);
                     ++nowread;
                     if (KEEP_READING() && (next == '+' || next == '-')) {
@@ -862,8 +900,10 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                         ++nowread;
                     }
                     *edi++ = 0;
-                    if (!*aton)
+                    if (!*aton) {
+                        MATCH_FAILURE();
                         goto read_failure;
+                    }
                     /* overflow? */
                     if (k >= SCANF_ATON_BUFFER_SIZE - 1)
                         re = (intmax_t)UINTMAX_MAX;
@@ -897,6 +937,7 @@ got_f_result:
                         *(va_arg(va, float *)) = (float)r;
                     }
                 }
+                match = 0;
             }
                 break;
 #endif
@@ -909,8 +950,12 @@ got_f_result:
                     next = getch(p);
                     ++nowread;
                 }
-                if (nowread < maxlen) goto read_failure;
+                if (nowread < maxlen) {
+                    MATCH_FAILURE();
+                    goto read_failure;
+                }
                 if (!nostore) ++fields;
+                match = 0;
             }
                 break;
             case 's': 
@@ -918,7 +963,10 @@ got_f_result:
                 char *outp = nostore ? NULL : va_arg(va, char *);
                 if (!maxlen)
 #if SCANF_SECURE
+                {
+                    MATCH_FAILURE();
                     goto read_failure;
+                }
 #else
                     maxlen = (size_t)-1;
 #endif
@@ -928,17 +976,21 @@ got_f_result:
                     next = getch(p);
                     ++nowread;
                 }
-                if (!nowread) goto read_failure;
+                if (!nowread) {
+                    MATCH_FAILURE();
+                    goto read_failure;
+                }
                 if (!nostore) {
                     *outp++ = 0;
                     ++fields;
                 }
+                match = 0;
             }
                 break;
             case '[':
             {
                 char *outp = nostore ? NULL : va_arg(va, char *);
-                int scan_r = 0, hyphen = 0;
+                BOOL scan_r = 0, hyphen = 0;
                 char invert = 0, prev = 0;
                 unsigned char c;
 #if SCANF_FAST_SCANSET
@@ -948,7 +1000,10 @@ got_f_result:
 #endif
                 if (!maxlen)
 #if SCANF_SECURE
+                {
+                    MATCH_FAILURE();
                     goto read_failure;
+                }
 #else
                     maxlen = (size_t)-1;
 #endif
@@ -967,7 +1022,7 @@ got_f_result:
                     else
                         mention[c] = 1, prev = c;
                     ++f;
-                    ++scan_r;
+                    scan_r = 1;
                 }
                 if (hyphen)
                     mention['-'] = 1;
@@ -975,14 +1030,14 @@ got_f_result:
                 set = f;
                 while ((c = *f) && (!scan_r || c != ']')) {
                     ++f;
-                    ++scan_r;
+                    scan_r = 1;
                 }
 #endif
                 while (KEEP_READING()) {
 #if SCANF_FAST_SCANSET
                     if (mention[next] == invert) break;
 #else
-                    int found = 0;
+                    char found = 0;
                     settmp = set;
                     prev = 0;
                     hyphen = 0;
@@ -1013,6 +1068,7 @@ got_f_result:
                     *outp++ = 0;
                     ++fields;
                 }
+                match = 0;
             }
                 break;
             case 'n':
@@ -1047,31 +1103,34 @@ got_f_result:
                 }
                 break;
             default:
+                MATCH_FAILURE();
                 goto read_failure;
             }
 
             ++f;
             read_chars += nowread;
         } else if (isspace(c)) {
+            if (GOT_EOF()) break;
             /* skip 0-N whitespace */
             while (isspace(next)) {
                 if ((next = getch(p)) < 0) break;
                 ++read_chars;
             }
         } else {
+            if (GOT_EOF()) break;
             /* must match literal character */
-            if (next != c)
+            if (next != c) {
+                MATCH_FAILURE();
                 break;
+            }
             next = getch(p);
             ++read_chars;
         }
-        if (GOT_EOF())
-            break;
     }
 read_failure:
     if (!GOT_EOF() && ungetch)
         ungetch(next, p);
-    return fields;
+    return (tryconv && match) ? EOF : fields;
 }
 
 static int getchw_(void* arg) {
@@ -1093,31 +1152,48 @@ static void usscanw_(int c, void* arg) {
     --*p;
 }
 
+int vscanf_(const char* format, va_list arg) {
+    return iscanf_(&getchw_, &ungetchw_, NULL, format, arg);
+}
+
 int scanf_(const char* format, ...) {
     int r;
     va_list va;
     va_start(va, format);
-    r = iscanf_(&getchw_, &ungetchw_, NULL, format, va);
+    r = vscanf_(format, va);
     va_end(va);
     return r;
+}
+
+int vspscanf_(const char **sp, const char* format, va_list arg) {
+    return iscanf_(&sscanw_, &usscanw_, sp, format, arg);   
+}
+
+int spscanf_(const char **sp, const char* format, ...) {
+    int r;
+    va_list va;
+    va_start(va, format);
+    r = vspscanf_(sp, format, va);
+    va_end(va);
+    return r;
+}
+
+int vsscanf_(const char *s, const char* format, va_list arg) {
+    return vspscanf_(&s, format, arg);
 }
 
 int sscanf_(const char *s, const char* format, ...) {
     int r;
     va_list va;
     va_start(va, format);
-    r = iscanf_(&sscanw_, &usscanw_, &s, format, va);
+    r = vsscanf_(s, format, va);
     va_end(va);
     return r;
 }
 
-int spscanf_(const char **s, const char* format, ...) {
-    int r;
-    va_list va;
-    va_start(va, format);
-    r = iscanf_(&sscanw_, &usscanw_, s, format, va);
-    va_end(va);
-    return r;
+int vfctscanf_(int (*getch)(void* data), void (*ungetch)(int c, void* data),
+                void* data, const char* format, va_list arg) {
+    return iscanf_(getch, ungetch, data, format, arg);
 }
 
 int fctscanf_(int (*getch)(void* data), void (*ungetch)(int c, void* data),
@@ -1125,24 +1201,7 @@ int fctscanf_(int (*getch)(void* data), void (*ungetch)(int c, void* data),
     int r;
     va_list va;
     va_start(va, format);
-    r = iscanf_(getch, ungetch, data, format, va);
+    r = vfctscanf_(getch, ungetch, data, format, va);
     va_end(va);
     return r;
-}
-
-int vscanf_(const char* format, va_list arg) {
-    return iscanf_(&getchw_, &ungetchw_, NULL, format, arg);
-}
-
-int vsscanf_(const char *s, const char* format, va_list arg) {
-    return iscanf_(&sscanw_, &usscanw_, &s, format, arg);
-}
-
-int vspscanf_(const char **sp, const char* format, va_list arg) {
-    return iscanf_(&sscanw_, &usscanw_, sp, format, arg);   
-}
-
-int vfctscanf_(int (*getch)(void* data), void (*ungetch)(int c, void* data),
-                void* data, const char* format, va_list arg) {
-    return iscanf_(getch, ungetch, data, format, arg);
 }

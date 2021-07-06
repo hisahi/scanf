@@ -1,6 +1,6 @@
 
 WORK IN PROGRESS! Some things may still be buggy. Issues and pull requests
-are welcome.
+are welcome. Additional tests are also very much welcome.
 
 This is a freestanding implementation of scanf (the standard C library function
 for reading formatted input). It does not have any dependencies other than the
@@ -8,10 +8,10 @@ C89 standard library, specifically the following headers:
     <limits.h>
     <stdarg.h>
     <stddef.h>
+    <stdint.h> (optional, C99 only)
     <ctype.h> (optional, if SCANF_INTERNAL_CTYPE = 0)
     <float.h> (optional, if SCANF_DISABLE_SUPPORT_FLOAT = 0)
     <math.h> (optional, if SCANF_NOMATH = 0)
-    <stdint.h> (optional, C99 only)
 
 The prototypes for the scanf functions are the same as in the standard:
 
@@ -57,7 +57,10 @@ not be called.
 
 This implementation of scanf is intended to be completely standards-compliant
 and support all the same format specifiers as a standards-compliant
-implementation.
+implementation. It is thread-safe and reentrant (does not use any static
+storage), nor does it require any dynamic allocations (malloc). Primary focus is
+on portability and robustness, while secondary focus is on maximizing
+performance and minimizing code size.
 
 Caveats:
 - Long length specifier for wide characters (%lc, %ls, %l[) is not supported.
