@@ -280,6 +280,9 @@ bool tests_ok() {
     TRY_TEST("standard %d with preceding newline",
         1, 3, "\n42", "%d", int(42));
 
+    TRY_TEST("negative %d",
+        1, 2, "-42", "%d", int(-42));
+
     TRY_TEST("%d%c without any whitespace",
         2, 3, "64c", "%d%c", int(64), char('c'));
 

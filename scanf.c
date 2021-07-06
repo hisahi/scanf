@@ -191,21 +191,27 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define EOF -1
 #endif
 
-/* try to map size_t to unsigned long long or unsigned long */
+/* try to map size_t to unsigned long long, unsigned long, or int */
 #if defined(SIZE_MAX)
 #if defined(ULLONG_MAX) && SIZE_MAX == ULLONG_MAX
 #define SIZET_ALIAS ll
 #elif defined(ULONG_MAX) && SIZE_MAX == ULONG_MAX
 #define SIZET_ALIAS l
+#elif defined(UINT_MAX) && SIZE_MAX == UINT_MAX
+#define SIZET_ALIAS
+/* intentionally empty -> maps to int */
 #endif
 #endif
 
-/* try to map ptrdiff_t to long long or long */
+/* try to map ptrdiff_t to long long, long, or int */
 #if defined(PTRDIFF_MAX)
 #if defined(LLONG_MAX) && PTRDIFF_MAX == LLONG_MAX && PTRDIFF_MIN == LLONG_MIN
 #define PTRDIFFT_ALIAS ll
 #elif defined(LONG_MAX) && PTRDIFF_MAX == LONG_MAX && PTRDIFF_MIN == LONG_MIN
 #define PTRDIFFT_ALIAS l
+#elif defined(INT_MAX) && PTRDIFF_MAX == INT_MAX && PTRDIFF_MIN == INT_MIN
+#define PTRDIFFT_ALIAS
+/* intentionally empty -> maps to int */
 #endif
 #endif
 
@@ -524,8 +530,6 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                              goto read_failure; } while (0)
         /* signal input failure and exit loop */
 #define INPUT_FAILURE() do { goto read_failure; } while (0)
-        /* store value to ptr with cast */
-#define STORE_VALUE(ptr, value, T) (*(T *)(ptr) = (T)(value))
 
         if (isspace(c)) {
             /* skip 0-N whitespace */
@@ -545,10 +549,12 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
             /* nowread = characters read for this format specifier
                maxlen = maximum number of characters to be read "field width" */
             size_t nowread = 0, maxlen = 0;
-            /* where the value will be stored */
-            void *dst;
             /* length specifier (l, ll, h, hh...) */
             enum dlength dlen = LN_;
+            /* where the value will be stored */
+            void *dst;
+            /* store value to dst with cast */
+#define STORE_DST(value, T) (*(T *)(dst) = (T)(value))
             
             /* nostore */
             if (*f == '*') {
@@ -698,6 +704,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     /* fall-through */
             readnum:
                     isptr = 0;
+                    negative = 0;
                     
                     /* sign, read even for %u */
                     switch (next) {
@@ -705,8 +712,6 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                         negative = 1;
                     case '+':
                         NEXT_CHAR(nowread);
-                    default:
-                        negative = 0;
                     }
                     /* fall-through */
             readptr:
@@ -767,74 +772,46 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
             storenum:
                 /* store number, either as ptr, unsigned or signed */
                 if (isptr)
-                    STORE_VALUE(dst, r, void *);
-                else if (unsign) {
+                    STORE_DST(r, void *);
+                else {
                     switch (dlen) {
                     case LN_hh:
-                        STORE_VALUE(dst, r, unsigned char);
+                        if (unsign) STORE_DST(r, unsigned char);
+                        else        STORE_DST(r, signed char);
                         break;
                     case LN_h:
-                        STORE_VALUE(dst, r, unsigned short);
+                        if (unsign) STORE_DST(r, unsigned short);
+                        else        STORE_DST(r, short);
                         break;
                     case LN_l:
-                        STORE_VALUE(dst, r, unsigned long);
+                        if (unsign) STORE_DST(r, unsigned long);
+                        else        STORE_DST(r, long);
                         break;
 #ifndef INTMAXT_ALIAS
                     case LN_j:
-                        STORE_VALUE(dst, r, uintmax_t);
+                        if (unsign) STORE_DST(r, uintmax_t);
+                        else        STORE_DST(r, intmax_t);
                         break;
 #endif
 #ifndef SIZET_ALIAS
                     case LN_z:
-                        STORE_VALUE(dst, r, size_t);
+                        STORE_DST(r, size_t);
                         break;
 #endif
 #ifndef PTRDIFFT_ALIAS
                     case LN_t:
-                        STORE_VALUE(dst, r, ptrdiff_t);
+                        STORE_DST(r, ptrdiff_t);
                         break;
 #endif
 #if !SCANF_DISABLE_SUPPORT_LONG_LONG
                     case LN_ll:
-                        STORE_VALUE(dst, r, unsigned long long);
+                        if (unsign) STORE_DST(r, unsigned long long);
+                        else        STORE_DST(r, long long);
                         break;
 #endif
                     default:
-                        STORE_VALUE(dst, r, unsigned);
-                    }
-                } else {
-                    switch (dlen) {
-                    case LN_hh:
-                        STORE_VALUE(dst, r, signed char);
-                        break;
-                    case LN_h:
-                        STORE_VALUE(dst, r, short);
-                        break;
-                    case LN_l:
-                        STORE_VALUE(dst, r, long);
-                        break;
-#ifndef INTMAXT_ALIAS
-                    case LN_j:
-                        STORE_VALUE(dst, r, intmax_t);
-                        break;
-#endif
-#ifndef SIZET_ALIAS
-                    case LN_z:
-                        STORE_VALUE(dst, r, size_t);
-                        break;
-#endif
-#ifndef PTRDIFFT_ALIAS
-                    case LN_t:
-                        STORE_VALUE(dst, r, ptrdiff_t);
-                        break;
-#endif
-#if !SCANF_DISABLE_SUPPORT_LONG_LONG
-                    case LN_ll:
-                        STORE_VALUE(dst, r, long long);
-                        break;
-#endif
-                    default:
-                        STORE_VALUE(dst, r, int);
+                        if (unsign) STORE_DST(r, unsigned);
+                        else        STORE_DST(r, int);
                     }
                 }
                 break;
@@ -998,13 +975,13 @@ got_f_result:
                 ++fields;
                 switch (dlen) {
                 case LN_l:
-                    STORE_VALUE(dst, r, double);
+                    STORE_DST(r, double);
                     break;
                 case LN_L:
-                    STORE_VALUE(dst, r, long double);
+                    STORE_DST(r, long double);
                     break;
                 default:
-                    STORE_VALUE(dst, r, float);
+                    STORE_DST(r, float);
                 }
             } /* =========== READ FLOAT =========== */
                 break;
