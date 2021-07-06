@@ -81,15 +81,11 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 
 #ifndef SCANF_ATOF_BUFFER_SIZE
-#define SCANF_ATOF_BUFFER_SIZE 32
+#define SCANF_ATOF_BUFFER_SIZE 48
 #endif
 
 #ifndef SCANF_ASCII
 #define SCANF_ASCII 1
-#endif
-
-#ifndef SCANF_SATURATE
-#define SCANF_SATURATE 0
 #endif
 
 #ifndef SCANF_FAST_SCANSET
@@ -101,11 +97,19 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 
 #ifndef SCANF_NOMATH
-#define SCANF_NOMATH 1
+#define SCANF_NOMATH 0
+#endif
+
+#ifndef SCANF_NOPOW
+#define SCANF_NOPOW 1
 #endif
 
 #ifndef SCANF_INTERNAL_CTYPE
 #define SCANF_INTERNAL_CTYPE 0
+#endif
+
+#ifndef SCANF_BINARY
+#define SCANF_BINARY 0
 #endif
 
 #if !SCANF_ASCII
@@ -133,11 +137,17 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 #endif
 
+#if SCANF_ASCII
+#define INLINE_IF_ASCII INLINE
+#else
+#define INLINE_IF_ASCII static
+#endif
+
 #ifndef EOF
 #define EOF -1
 #endif
 
-INLINE int ctodn_(const char c) {
+INLINE_IF_ASCII int ctodn_(const char c) {
 #if SCANF_ASCII
     return c - '0';
 #else
@@ -157,7 +167,7 @@ INLINE int ctodn_(const char c) {
 #endif
 }
 
-INLINE int ctoon_(const char c) {
+INLINE_IF_ASCII int ctoon_(const char c) {
 #if SCANF_ASCII
     return c - '0';
 #else
@@ -175,7 +185,7 @@ INLINE int ctoon_(const char c) {
 #endif
 }
 
-INLINE int ctoxn_(const char c) {
+static int ctoxn_(const char c) {
 #if SCANF_ASCII
     if (c >= 'a')
         return c - 'a' + 10;
@@ -205,17 +215,37 @@ INLINE int ctoxn_(const char c) {
 #endif
 }
 
-INLINE int ctobn_(const char c, int b) {
-    if (b == 8)
+#if SCANF_BINARY
+INLINE_IF_ASCII int ctobn_(const char c) {
+#if SCANF_ASCII
+    return c - '0';
+#else
+    switch (c) {
+    case '0': return 0;
+    case '1': return 1;
+    default:  return -1;
+    }
+#endif
+}
+#endif
+
+static int ctorn_(const char c, int b) {
+    switch (b) {
+    case 8:
         return ctoon_(c);
-    else if (b == 16)
+    case 16:
         return ctoxn_(c);
-    else /* if (b == 10) */
+#if SCANF_BINARY
+    case 2:
+        return ctobn_(c);
+#endif
+    default: /* 10 */
         return ctodn_(c);
+    }
 }
 
 #if SCANF_INTERNAL_CTYPE
-INLINE int isspace(int c) {
+static int isspace(int c) {
     switch (c) {
     case ' ':
     case '\t':
@@ -264,54 +294,43 @@ INLINE int isdigx_(const char c) {
 #endif
 }
 
-INLINE int isdigb_(const char c, int b) {
-    if (b == 8)
-        return isdigo_(c);
-    else if (b == 16)
-        return isdigx_(c);
-    else /* if (b == 10) */
-        return isdigit(c);
+#if SCANF_BINARY
+INLINE int isdigb_(const char c) {
+    return c == '0' || c == '1';
 }
+#endif
 
-static size_t atodz_(const char* s) {
-    char c;
-    size_t r = 0;
-#if SCANF_SATURATE
-    size_t pr = 0;
+INLINE int isdigr_(const char c, int b) {
+    switch (b) {
+    case 8:
+        return isdigo_(c);
+    case 16:
+        return isdigx_(c);
+#if SCANF_BINARY
+    case 2:
+        return isdigb_(c);
 #endif
-    while ((c = *s++)) {
-        r *= 10;  
-#if SCANF_SATURATE
-        if (r < pr)
-            return SIZE_MAX;
-        pr = r;
-#endif
-        r += ctodn_(c);
+    default: /* 10 */
+        return isdigit(c);
     }
-    return r;
 }
 
 static uintmax_t atobn_(const char* s, int b) {
     char c;
-    uintmax_t r = 0;
-#if SCANF_SATURATE
-    uintmax_t pr = 0;
-#endif
+    uintmax_t r = 0, pr = 0;
     while ((c = *s++)) {
         r *= b;
-#if SCANF_SATURATE
         if (r < pr)
             return UINTMAX_MAX;
         pr = r;
-#endif
-        r += ctobn_(c, b);
+        r += ctorn_(c, b);
     }
     return r;
 }
 
 #if !SCANF_DISABLE_SUPPORT_FLOAT
 
-#if !SCANF_NOMATH
+#if !SCANF_NOPOW
 INLINE maxfloat_t pow10_(intmax_t y) {
     return pow(10, y);
 }
@@ -398,7 +417,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                    void* p, const char* ff, va_list va) {
     /* fields = number of fields successfully read; this is the return value */
     /* next = the "next" character to be processed, initially -1 */
-    int fields = 0, next = -1;
+    int fields = 0, next = EOF;
     /* total characters read, returned by %n */
     size_t read_chars = 0;
     const unsigned char *f = (const unsigned char *)ff;
@@ -436,7 +455,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 for (k = 0; isdigit(*f) && k < SCANF_ATON_BUFFER_SIZE - 1; ++k)
                     *di++ = *f++;
                 *di++ = 0;
-                maxlen = atodz_(aton);
+                maxlen = (size_t)atobn_(aton, 10);
             }
 
             /* length specifier */
@@ -498,12 +517,35 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 next = getch(p);
                 ++read_chars;
                 break;
+            case 'p': /* pointer */
+                if (next == '(') { /* handle (nil) */
+                    int k;
+                    const char *rest = "nil)";
+                    if (!maxlen) maxlen = (size_t)-1;
+                    next = getch(p);
+                    ++nowread;
+                    for (k = 0; k < 4; ++k) {
+                        if (!KEEP_READING() || next != rest[k])
+                            goto read_failure;
+                        next = getch(p);
+                        ++nowread;
+                    }
+                    if (!nostore) {
+                        ++fields;
+                        *(va_arg(va, void **)) = NULL;
+                    }
+                    break;
+                }
+                /* fall-through */
             case 'd': /* signed decimal integer */
             case 'u': /* unsigned decimal integer */ 
             case 'i': /* signed decimal/hex/binary integer */
-            case 'o': /* signed octal integer */
-            case 'x': /* signed hexadecimal integer */
+            case 'o': /* unsigned octal integer */
+            case 'x': /* unsigned hexadecimal integer */
             case 'X':
+#if SCANF_BINARY
+            case 'b': /* non-standard: unsigned binary integer */
+#endif
             {
                 intmax_t r = 0;
                 /* had minus? */
@@ -514,6 +556,8 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 int base;
                 /* unsigned? */
                 int unsign;
+                /* %p? */
+                int isptr;
                 char aton[SCANF_ATON_BUFFER_SIZE], *di = aton;
                 int k;
                 if (!maxlen) maxlen = (size_t)-1;
@@ -523,48 +567,61 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 case 'o':
                     base = 8;
                     unsign = 1;
+                    isptr = 0;
                     break;
                 case 'x':
                     base = 16;
                     unsign = 1;
+                    isptr = 0;
                     break;
+                case 'p':
+                    base = 16;
+                    unsign = 1;
+                    isptr = 1;
+                    break;
+#if SCANF_BINARY
+                case 'b':
+                    base = 2;
+                    unsign = 1;
+                    isptr = 0;
+                    break;
+#endif
                 default:
                     base = 10;
                     unsign = c == 'u';
+                    isptr = 0;
                 }
 
-                /* sign, read even for %u */
-                switch (next) {
-                case '-':
-                    negative = 1;
-                case '+':
-                    next = getch(p);
-                    ++nowread;
+                if (!isptr) {
+                    /* sign, read even for %u */
+                    switch (next) {
+                    case '-':
+                        negative = 1;
+                    case '+':
+                        next = getch(p);
+                        ++nowread;
+                    }
                 }
-                if (c == 'i') { /* detect base from string */
+                /* detect base from string for %i, skip 0x for %x,
+                                                   demand 0x for %p */
+                if (c == 'i' || c == 'x' || c == 'X' || c == 'p') {
+                    int notfoundhex = isptr;
                     if (KEEP_READING() && next == '0') {
                         zero = 1;
-                        base = 8;
                         next = getch(p);
                         ++nowread;
                         if (KEEP_READING() && (next == 'x'
                                                  || next == 'X')) {
                             base = 16;
                             next = getch(p);
+                            notfoundhex = 0;
                             ++nowread;
+                        } else if (base == 10) {
+                            base = 8;
                         }
                     }
-                } else if (c == 'x') { /* skip 0x for %x */
-                    if (KEEP_READING() && next == '0') {
-                        zero = 1;
-                        next = getch(p);
-                        ++nowread;
-                        if (KEEP_READING() && (next == 'x'
-                                                 || next == 'X')) {
-                            next = getch(p);
-                            ++nowread;
-                        }
-                    }
+                    if (notfoundhex)
+                        goto read_failure;
                 }
                 /* skip initial zeros */
                 while (KEEP_READING() && next == '0') {
@@ -573,7 +630,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     zero = 1;
                 }
                 /* read numbers into buffer */
-                for (k = 0; KEEP_READING() && isdigb_(next, base); ++k) {
+                for (k = 0; KEEP_READING() && isdigr_(next, base); ++k) {
                     if (k < SCANF_ATON_BUFFER_SIZE - 1)
                         *di++ = next;
                     next = getch(p);
@@ -593,7 +650,10 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 if (negative) r *= -1;
                 if (!nostore) {
                     ++fields;
-                    if (unsign) {
+                    if (isptr) {
+                        *(va_arg(va, void **)) = (void *)r;
+                        break;
+                    } else if (unsign) {
                         switch (dlen) {
                         case LN_hh:
                             *(va_arg(va, unsigned char *)) = (unsigned char)r;
@@ -693,16 +753,14 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     }
                     if (KEEP_READING() && next == '(') {
                         while (KEEP_READING()) {
-                            if (next == ')')
+                            next = getch(p);
+                            ++nowread;
+                            if (next == ')') {
+                                next = getch(p);
+                                ++nowread;
                                 break;
-                            else if (next != '_' && !isalnum(next))
+                            } else if (next != '_' && !isalnum(next))
                                 goto read_failure;
-                            next = getch(p);
-                            ++nowread;
-                        }
-                        if (next == ')') {
-                            next = getch(p);
-                            ++nowread;
                         }
                     }
 
@@ -721,6 +779,18 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                         ++nowread;
                     }
                     r = (negative ? -1 : 1) * INFINITY;
+                    /* try reading the rest */
+                    if (KEEP_READING()) {
+                        const char *rest2 = "INITY";
+                        for (k = 0; k < 5; ++k) {
+                            if (!KEEP_READING() ||
+                                    (next != rest2[k] && 
+                                     next != tolower(rest2[k])))
+                                break;
+                            next = getch(p);
+                            ++nowread;
+                        }
+                    }
                     goto got_f_result;
                 }
 #endif
@@ -736,9 +806,6 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     }
                 }
 
-                /* float cannot start with a decimal point! */
-                if (next == '.')
-                    goto read_failure;
                 while (KEEP_READING() && next == '0') {
                     next = getch(p);
                     ++nowread;
@@ -746,7 +813,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 }
                 /* copy strings of digits + decimal point to buffer */
                 for (k = 0; KEEP_READING() &&
-                        (isdigb_(next, base) || (!dot && next == '.')); ++k) {
+                        (isdigr_(next, base) || (!dot && next == '.')); ++k) {
                     if (k < SCANF_ATOF_BUFFER_SIZE - 1)
                         *di++ = next;
                     dot |= next == '.';
@@ -754,6 +821,14 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     ++nowread;
                 }
                 *di++ = 0;
+                /* float cannot just be a decimal point! */
+                if (dot && k == 1)
+                    goto read_failure;
+
+                /* TODO if !dot && k >= SCANF_ATOF_BUFFER_SIZE - 1,
+                   there's probably an overflow or similar as the integer
+                   part is too long. but the exponent may fix it.
+                   maybe we should do the conversion in parts? */
 
                 /* if buffer empty, could not read */
                 if (!*atof && !zero)
@@ -936,45 +1011,6 @@ got_f_result:
                 }
                 if (!nostore) {
                     *outp++ = 0;
-                    ++fields;
-                }
-            }
-                break;
-            case 'p': 
-            {
-                uintmax_t r = 0;
-                char aton[SCANF_ATON_BUFFER_SIZE], *di = aton;
-                int k;
-                if (!maxlen) maxlen = (size_t)-1;
-
-                if (!KEEP_READING() || next != '0')
-                    goto read_failure;
-                next = getch(p);
-                ++nowread;
-                if (!KEEP_READING() || (next != 'x' && next != 'X'))
-                    goto read_failure;
-                next = getch(p);
-                ++nowread;
-
-                while (KEEP_READING() && next == '0') {
-                    next = getch(p);
-                    ++nowread;
-                }
-                for (k = 0; KEEP_READING() && isdigx_(next); ++k) {
-                    if (k < SCANF_ATON_BUFFER_SIZE - 1)
-                        *di++ = next;
-                    next = getch(p);
-                    ++nowread;
-                }
-                *di++ = 0;
-                if (!*aton)
-                    goto read_failure;
-                if (k >= SCANF_ATON_BUFFER_SIZE - 1)
-                    r = UINTMAX_MAX;
-                else
-                    r = atobn_(aton, 16);
-                if (!nostore) {
-                    *(va_arg(va, void **)) = (void *)r;
                     ++fields;
                 }
             }

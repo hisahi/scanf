@@ -63,6 +63,8 @@ Caveats:
 - Long length specifier for wide characters (%lc, %ls, %l[) is not supported.
   Read in multibyte characters and use mbstowcs yourself.
   Perhaps I'll implement *wscanf functions and support %l* only there.
+- Long floating point numbers might not be converted correctly if they do not
+  fit into the buffer.
 - The only supported locale is the C locale; no locale-specific formatting
   is allowed.
 
@@ -70,7 +72,7 @@ Defines:
     SCANF_ATON_BUFFER_SIZE (default: 32)
         Size of buffer allocated on the stack for reading integral
         numbers for conversion into a string.
-    SCANF_ATOF_BUFFER_SIZE (default: 32)
+    SCANF_ATOF_BUFFER_SIZE (default: 48)
         Size of buffer allocated on the stack for reading floating point
         numbers for conversion into a string.
     SCANF_DISABLE_SUPPORT_FLOAT (default: undefined)
@@ -86,11 +88,14 @@ Defines:
     SCANF_INTERNAL_CTYPE (default: 0)
         Define as 1 to use internal ctype functions instead of including
         <ctype.h>. Requires SCANF_ASCII.
-    SCANF_NOMATH (default: 1)
-        Define as 0 to use pow from <math.h> as a dependency. only needed
+    SCANF_NOMATH (default: 0)
+        Define as 1 to not use <math.h> as a dependency. It is only needed
         for floating-point support; SCANF_NOMATH has no effect if
         SCANF_DISABLE_SUPPORT_FLOAT is defined to be true.
-        Setting SCANF_NOMATH to 0 may speed up conversions to float.
+    SCANF_NOPOW (default: 1)
+        Define as 0 to use pow() from <math.h>. Has no effect is SCANF_NOMATH
+        or SCANF_DISABLE_SUPPORT_FLOAT is defined to be true.
+        Setting SCANF_NOPOW to 0 may speed up conversions to float.
     SCANF_INFINITE (default: 1 if C99 and SCANF_NOMATH not defined, else 0)
         Define as 1 to enable INFINITY/NAN support. Macros called INFINITY
         and NAN must be defined. SCANF_INFINITE has no effect if
@@ -100,6 +105,9 @@ Defines:
     SCANF_SECURE (default: 0)
         Triggers a read failure if a %s or %[ format specifier does not specify
         a maximum length/width.
+    SCANF_BINARY (default: 0)
+        Adds a new custom formatter %b for binary numbers. You should consider
+        increasing SCANF_ATON_BUFFER_SIZE if setting this to 1.
 
 To use this library, simply include scanf.h, compile and link scanf.c into
 your program and implement getch_ as documented above.

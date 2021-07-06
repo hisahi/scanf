@@ -98,11 +98,26 @@ std::ostream& operator<<(std::ostream& os, const buf_str<I>& buf) {
     return os << buf.s;
 }
 
+template <typename T>
+bool compareEq(const T& a, const T& b) {
+    return a == b;
+}
+
+template <>
+bool compareEq<float>(const float& a, const float& b) {
+    return a == b || (std::isnan(a) && std::isnan(b));
+}
+
+template <>
+bool compareEq<double>(const double& a, const double& b) {
+    return a == b || (std::isnan(a) && std::isnan(b));
+}
+
 template <typename I, typename... Ts>
 class ScanfTestCase_ : public TestCase {
     template <std::size_t J>
     bool column_ok() const {
-        return J >= readin_ || std::get<J>(ret_) == std::get<J>(comp_);
+        return J >= readin_ || compareEq(std::get<J>(ret_), std::get<J>(comp_));
     }
 
     template <std::size_t J>
@@ -402,8 +417,14 @@ bool tests_ok() {
     TRY_TEST("%f multidots 2",
         1, "2..2", "%f", float(2.0f));
 
+    TRY_TEST("%f 0.5",
+        1, "0.5", "%f", float(0.5f));
+
     TRY_TEST("%f startdot",
-        0, ".2", "%f", float(0.0f));
+        1, ".2", "%f", float(0.2f));
+
+    TRY_TEST("%f dot only",
+        0, ".a", "%f", float(0.0f));
 
     TRY_TEST("%f plus",
         1, "+2.5", "%f", float(2.5f));
@@ -426,8 +447,31 @@ bool tests_ok() {
     TRY_TEST("%f hex",
         1, "0x0.3p10", "%f", float(192.0f));
 
+#if SCANF_INFINITE
+    TRY_TEST("%f inf",
+        1, "inf", "%f", float(INFINITY));
+        
+    TRY_TEST("%f -infinity",
+        1, "-INFINITY", "%f", float(-INFINITY));
+        
+    TRY_TEST("%f nan",
+        1, "nan", "%f", float(NAN));
+        
+    TRY_TEST("%f nan with msg",
+        1, "nan(0123)", "%f", float(NAN));
+#endif
+
     TRY_TEST("%p",
         1, "0x01ff", "%p", (void *)0x01ff);
+
+    TRY_TEST("%p (nil)",
+        1, "(nil)", "%p", (void *)0);
+
+#if SCANF_BINARY
+    TRY_TEST("%b",
+        1, "1001101001", "%b", (int)617);
+
+#endif
 
     TRY_TEST("literal",
         1, "abc3", "abc%d", int(3));
