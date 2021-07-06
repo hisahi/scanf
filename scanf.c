@@ -377,9 +377,7 @@ static int atobui_(const unsigned char* s, int b, uintmax_t* r) {
    b = radix, ovf = maximum value (overflow) */
 INLINE uintmax_t atobu_(const unsigned char* s, int b, uintmax_t ovf) {
     uintmax_t r;
-    if (atobui_(s, b, &r))
-        r = ovf;
-    return r;
+    return atobui_(s, b, &r) ? ovf : r;
 }
 
 /* convert string to signed int. negative flag controls if int is negative.
@@ -387,7 +385,7 @@ INLINE uintmax_t atobu_(const unsigned char* s, int b, uintmax_t ovf) {
 INLINE intmax_t atobn_(const unsigned char* s, BOOL negative, int b,
                         intmax_t uvf, intmax_t ovf) {
     uintmax_t r;
-    if (atobui_(s, b, &r))
+    if (atobui_(s, b, &r) || r > (uintmax_t)ovf)
         return negative ? uvf : ovf;
     else
         return negative ? -(intmax_t)r : (intmax_t)r;
@@ -517,6 +515,15 @@ void stsi_(enum dlength dlen, intmax_t r, va_list va) {
     }
 }
 
+/* store pointer */
+void stptr_(void* p, va_list va) {
+    *(va_arg(va, void **)) = p;
+}
+
+char *gcptr_(va_list va) {
+    return va_arg(va, char *);
+}
+
 #if !SCANF_DISABLE_SUPPORT_FLOAT
 
 /* store float */
@@ -609,7 +616,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     ++f;
                 for (k = 0; isdigit(*f) && k < SCANF_ATOD_BUFFER_SIZE - 1; ++k)
                     *di++ = *f++;
-                *di++ = 0;
+                *di = 0;
                 maxlen = (size_t)atobu_(aton, 10, UINTMAX_MAX);
             }
 
@@ -668,14 +675,16 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 if (next != '%') MATCH_FAILURE();
                 NEXT_CHAR(nowread);
                 break;
-            {
+            { /* =========== READ INT =========== */
                 /* variables for reading ints */
                 /* decimal, hexadecimal, binary */
                 int base;
                 /* unsigned? %p? */
                 BOOL unsign, isptr;
+                /* is negative? */
+                BOOL negative;
                 
-                case 'p': /* pointer */
+            case 'p': /* pointer */
                     if (next == '(') { /* handle (nil) */
                         int k;
                         const char *rest = "nil)";
@@ -688,7 +697,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                         }
                         if (!nostore) {
                             ++fields;
-                            *(va_arg(va, void **)) = NULL;
+                            stptr_(NULL, va);
                         }
                         MATCH_SUCCESS();
                         break;
@@ -696,49 +705,51 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     base = 16;
                     unsign = 0;
                     isptr = 1;
+                    negative = 0;
                     goto readptr;
-                case 'o': /* unsigned octal integer */
+            case 'o': /* unsigned octal integer */
                     base = 8;
                     unsign = 1;
                     goto readnum;
-                case 'x': /* unsigned hexadecimal integer */
-                case 'X':
+            case 'x': /* unsigned hexadecimal integer */
+            case 'X':
                     base = 16;
                     unsign = 1;
                     goto readnum;
 #if SCANF_BINARY
-                case 'b': /* non-standard: unsigned binary integer */
+            case 'b': /* non-standard: unsigned binary integer */
                     base = 2;
                     unsign = 1;
                     goto readnum;
 #endif
-                case 'd': /* signed decimal integer */
-                case 'u': /* unsigned decimal integer */ 
-                case 'i': /* signed decimal/hex/binary integer */
+            case 'd': /* signed decimal integer */
+            case 'u': /* unsigned decimal integer */ 
+            case 'i': /* signed decimal/hex/binary integer */
                     base = 10;
                     unsign = c == 'u';
                     /* fall-through */
                 readnum:
                     isptr = 0;
+                    
+                    /* sign, read even for %u */
+                    switch (next) {
+                    case '-':
+                        negative = 1;
+                    case '+':
+                        NEXT_CHAR(nowread);
+                    default:
+                        negative = 0;
+                    }
                     /* fall-through */
                 readptr:
                 {
                     intmax_t r = 0;
-                    /* had minus? allow empty = zero? */
-                    BOOL negative = 0, zero = 0;
+                    /* allow empty = zero? */
+                    BOOL zero = 0;
                     unsigned char aton[SCANF_ATON_BUFFER_SIZE], *di = aton;
                     int k;
                     if (!maxlen) maxlen = (size_t)-1;
 
-                    if (!isptr) {
-                        /* sign, read even for %u */
-                        switch (next) {
-                        case '-':
-                            negative = 1;
-                        case '+':
-                            NEXT_CHAR(nowread);
-                        }
-                    }
                     /* detect base from string for %i, skip 0x for %x,
                                                      demand 0x for %p */
                     if (c == 'i' || c == 'x' || c == 'X' || c == 'p') {
@@ -751,7 +762,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                                 base = 16;
                                 notfoundhex = 0;
                                 NEXT_CHAR(nowread);
-                            } else if (base == 10) {
+                            } else if (c == 'i') {
                                 base = 8;
                             }
                         }
@@ -769,7 +780,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                             *di++ = next, ++k;
                         NEXT_CHAR(nowread);
                     }
-                    *di++ = 0;
+                    *di = 0;
 
                     /* if buffer empty, could not read */
                     if (!*aton && !zero)
@@ -786,7 +797,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     if (!nostore) {
                         ++fields;
                         if (isptr)
-                            *(va_arg(va, void **)) = (void *)r;
+                            stptr_((void *)r, va);
                         else if (unsign)
                             stui_(dlen, (uintmax_t)r, va);
                         else
@@ -794,11 +805,10 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     }
                 }
                 break;
-            }
+            } /* =========== READ INT =========== */
             case 'n':
-                if (nostore)
-                    break;
-                stsi_(dlen, (intmax_t)read_chars, va);
+                if (!nostore)
+                    stsi_(dlen, (intmax_t)read_chars, va);
                 break;
             case 'e': case 'E': /* scientific format float */
             case 'f': case 'F': /* decimal format float */
@@ -809,7 +819,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 /* no support here */
                 MATCH_FAILURE();
 #else
-            {
+            { /* =========== READ FLOAT =========== */
                 maxfloat_t r;
                 unsigned char atof[SCANF_ATOF_BUFFER_SIZE], *di = atof;
                 intmax_t exp = 0;
@@ -894,7 +904,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                         dot = 1;
                     NEXT_CHAR(nowread);
                 }
-                *di++ = 0;
+                *di = 0;
                 /* if buffer empty, could not read */
                 if (!*atof && !zero)
                     MATCH_FAILURE();
@@ -927,7 +937,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                             *edi++ = next, ++k;
                         NEXT_CHAR(nowread);
                     }
-                    *edi++ = 0;
+                    *edi = 0;
                     if (!*aton && !ezero)
                         MATCH_FAILURE();
                     /* overflow? */
@@ -960,12 +970,12 @@ got_f_result:
                     stfp_(dlen, r, va);
                 }
                 MATCH_SUCCESS();
-            }
+            } /* =========== READ FLOAT =========== */
                 break;
 #endif
             case 'c': 
-            {
-                char *outp = nostore ? NULL : va_arg(va, char *);
+            { /* =========== READ CHAR =========== */
+                char *outp = nostore ? (char *)NULL : gcptr_(va);
                 if (!maxlen) maxlen = 1;
                 while (KEEP_READING()) {
                     if (!nostore) *outp++ = next;
@@ -975,11 +985,11 @@ got_f_result:
                     MATCH_FAILURE();
                 if (!nostore) ++fields;
                 MATCH_SUCCESS();
-            }
+            } /* =========== READ CHAR =========== */
                 break;
             case 's': 
-            {
-                char *outp = nostore ? NULL : va_arg(va, char *);
+            { /* =========== READ STR =========== */
+                char *outp = nostore ? (char *)NULL : gcptr_(va);
                 if (!maxlen)
 #if SCANF_SECURE
                     MATCH_FAILURE();
@@ -998,11 +1008,11 @@ got_f_result:
                     ++fields;
                 }
                 MATCH_SUCCESS();
-            }
+            } /* =========== READ STR =========== */
                 break;
             case '[':
-            {
-                char *outp = nostore ? NULL : va_arg(va, char *);
+            { /* =========== READ SCANSET =========== */
+                char *outp = nostore ? (char *)NULL : gcptr_(va);
                 BOOL hyphen = 0, invert = 0;
                 unsigned char prev = 0, c;
 #if SCANF_FAST_SCANSET
@@ -1078,7 +1088,7 @@ got_f_result:
                     ++fields;
                 }
                 MATCH_SUCCESS();
-            }
+            } /* =========== READ SCANSET =========== */
                 break;
             default:
                 /* unrecognized specification */
