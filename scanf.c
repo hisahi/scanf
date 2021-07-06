@@ -104,14 +104,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define SCANF_NOMATH 1
 #endif
 
-#ifndef SCANF_INFINITE
-#if SCANF_C99 && !SCANF_NOMATH && defined(NAN) && defined(INFINITY)
-#define SCANF_INFINITE 1
-#else
-#define SCANF_INFINITE 0
-#endif
-#endif
-
 #ifndef SCANF_INTERNAL_CTYPE
 #define SCANF_INTERNAL_CTYPE 0
 #endif
@@ -131,6 +123,14 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #if !SCANF_INTERNAL_CTYPE
 #include <ctype.h>
+#endif
+
+#ifndef SCANF_INFINITE
+#if SCANF_C99 && !SCANF_NOMATH && defined(NAN) && defined(INFINITY)
+#define SCANF_INFINITE 1
+#else
+#define SCANF_INFINITE 0
+#endif
 #endif
 
 #ifndef EOF
@@ -391,7 +391,8 @@ static maxfloat_t atoxlf_(const char* s, int negative, intmax_t exp) {
 
 enum dlength { LN_, LN_hh, LN_h, LN_l, LN_ll, LN_j, LN_z, LN_t, LN_L };
 
-#define IS_EOF() (next < 0)
+#define IS_EOF(c) ((c) < 0)
+#define GOT_EOF() (IS_EOF(next))
 
 static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                    void* p, const char* ff, va_list va) {
@@ -403,10 +404,11 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
     const unsigned char *f = (const unsigned char *)ff;
     unsigned char c;
     while ((c = *f++)) {
-        if (next < 0) {
+        if (IS_EOF(next)) {
             /* read and cache first character */
-            if ((next = getch(p)) < 0) return EOF;
-            ++read_chars;
+            next = getch(p);
+            if (GOT_EOF()) return EOF;
+            /* ++read_chars; intentionally left out, otherwise %n is off by 1 */
         }
         if (c == '%') {
             /* nostore is %*, prevents a value from being stored */
@@ -415,7 +417,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                maxlen = maximum number of characters to be read "field width" */
             size_t nowread = 0, maxlen = 0;
             /* still characters to read? (not EOF and width not exceeded) */
-#define KEEP_READING() (nowread < maxlen && !IS_EOF())
+#define KEEP_READING() (nowread < maxlen && !GOT_EOF())
             /* length specifier (l, ll, h, hh...) */
             enum dlength dlen = LN_;
             
@@ -469,7 +471,22 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
 #endif
             }
 
-            if (IS_EOF())
+            switch (*f) {
+            /* do not skip whitespace for... */
+            case '[':
+            case 'c':
+            case 'n':
+            /* case '%': */
+                break;
+            default:
+                /* skip whitespace. include in %n, but not elsewhere */
+                while (!GOT_EOF() && isspace(next)) {
+                    next = getch(p);
+                    ++read_chars;
+                }
+            }
+
+            if (GOT_EOF())
                 goto read_failure;
 
             /* format */
@@ -501,12 +518,6 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 int k;
                 if (!maxlen) maxlen = (size_t)-1;
                 c = *f;
-
-                /* skip whitespace. include in %n, but not elsewhere */
-                while (isspace(next)) {
-                    if ((next = getch(p)) < 0) break;
-                    ++read_chars;
-                }
 
                 switch (c) {
                 case 'o':
@@ -659,12 +670,6 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 int negative = 0, base = 10, dot = 0, zero = 0, k;
                 if (!maxlen) maxlen = (size_t)-1;
                 
-                /* skip whitespace. include in %n, but not elsewhere */
-                while (isspace(next)) {
-                    if ((next = getch(p)) < 0) break;
-                    ++read_chars;
-                }
-
                 switch (next) {
                 case '-':
                     negative = 1;
@@ -843,12 +848,6 @@ got_f_result:
                     maxlen = (size_t)-1;
 #endif
 
-                /* skip whitespace. include in %n, but not elsewhere */
-                while (isspace(next)) {
-                    if ((next = getch(p)) < 0) break;
-                    ++read_chars;
-                }
-
                 while (KEEP_READING() && !isspace(next)) {
                     if (!nostore) *outp++ = next;
                     next = getch(p);
@@ -948,12 +947,6 @@ got_f_result:
                 int k;
                 if (!maxlen) maxlen = (size_t)-1;
 
-                /* skip whitespace. include in %n, but not elsewhere */
-                while (isspace(next)) {
-                    if ((next = getch(p)) < 0) break;
-                    ++read_chars;
-                }
-
                 if (!KEEP_READING() || next != '0')
                     goto read_failure;
                 next = getch(p);
@@ -988,33 +981,32 @@ got_f_result:
                 break;
             case 'n':
                 if (!nostore) {
-                    size_t rc = read_chars - !IS_EOF();
                     switch (dlen) {
                     case LN_hh:
-                        *(va_arg(va, signed char *)) = (signed char)rc;
+                        *(va_arg(va, signed char *)) = (signed char)read_chars;
                         break;
                     case LN_h:
-                        *(va_arg(va, short *)) = (short)rc;
+                        *(va_arg(va, short *)) = (short)read_chars;
                         break;
                     case LN_l:
-                        *(va_arg(va, long *)) = (long)rc;
+                        *(va_arg(va, long *)) = (long)read_chars;
                         break;
                     case LN_j:
-                        *(va_arg(va, intmax_t *)) = (intmax_t)rc;
+                        *(va_arg(va, intmax_t *)) = (intmax_t)read_chars;
                         break;
                     case LN_z:
-                        *(va_arg(va, size_t *)) = rc;
+                        *(va_arg(va, size_t *)) = read_chars;
                         break;
                     case LN_t:
-                        *(va_arg(va, ptrdiff_t *)) = (ptrdiff_t)rc;
+                        *(va_arg(va, ptrdiff_t *)) = (ptrdiff_t)read_chars;
                         break;
 #if !SCANF_DISABLE_SUPPORT_LONG_LONG
                     case LN_ll:
-                        *(va_arg(va, long long *)) = (long long)rc;
+                        *(va_arg(va, long long *)) = (long long)read_chars;
                         break;
 #endif
                     default:
-                        *(va_arg(va, int *)) = (int)rc;
+                        *(va_arg(va, int *)) = (int)read_chars;
                     }
                 }
                 break;
@@ -1037,11 +1029,11 @@ got_f_result:
             next = getch(p);
             ++read_chars;
         }
-        if (IS_EOF())
+        if (GOT_EOF())
             break;
     }
 read_failure:
-    if (!IS_EOF() && ungetch)
+    if (!GOT_EOF() && ungetch)
         ungetch(next, p);
     return fields;
 }

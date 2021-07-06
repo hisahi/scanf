@@ -173,8 +173,11 @@ private:
 template <typename... Ts>
 class ScanfTestCase :
     public ScanfTestCase_<std::make_index_sequence<sizeof...(Ts)>, Ts...> {
-    using base = ScanfTestCase_<std::make_index_sequence<sizeof...(Ts)>, Ts...>;
-    using base::ScanfTestCase_;
+public:
+    ScanfTestCase(const std::string& name, const std::string& input, int n,
+                const std::string& fmt, const std::tuple<Ts...>& returns)
+        : ScanfTestCase_<std::make_index_sequence<sizeof...(Ts)>, Ts...>(
+            name, input, n, fmt, returns) { }
 };
 
 template <typename... Ts>
