@@ -71,6 +71,10 @@ Caveats:
 - The only supported locale is the C locale; no locale-specific formatting
   is allowed.
 
+To use this library, simply include scanf.h, compile and link scanf.c into
+your program and implement getch_ and ungetch_ as documented above. You may
+also want to look at the defines below to customize your build.
+
 Defines:
     SCANF_ATON_BUFFER_SIZE (default: 72 if SCANF_BINARY, else 32)
         Size of buffer allocated on the stack for reading integral
@@ -114,9 +118,6 @@ Defines:
     SCANF_BINARY (default: 0)
         Adds a new custom formatter %b for binary numbers. You should consider
         increasing SCANF_ATON_BUFFER_SIZE if setting this to 1.
-
-To use this library, simply include scanf.h, compile and link scanf.c into
-your program and implement getch_ as documented above.
 
 Tests for scanf are included in the test program test-scanf.cc under the
 test folder.
