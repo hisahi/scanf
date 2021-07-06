@@ -47,7 +47,8 @@ getch_ shall return an int that can be represented as an unsigned char
 
 ungetch_ shall push a character back into the stream such that the next getch_
 call will return the character pushed. ungetch_ will not be called more than
-once for every *scanf call.
+once for every *scanf call, nor will it be called more than once between calls
+to getch_.
 
 The functions given to (v)fctscanf shall function identically, except also take
 a parameter of type void * which will have the same value as passed to
