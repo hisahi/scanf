@@ -103,7 +103,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 
 /* maximum precision floating point type */
-#define maxfloat_t long double
+#define floatmax_t long double
 
 #if SCANF_C99
 #define INLINE static inline
@@ -517,12 +517,12 @@ INLINE intmax_t atobn_(const unsigned char* s, BOOL negative, int b,
 #if !SCANF_DISABLE_SUPPORT_FLOAT
 
 #if !SCANF_NOPOW
-INLINE maxfloat_t powi_(maxfloat_t x, intmax_t y) {
+INLINE floatmax_t powi_(floatmax_t x, intmax_t y) {
     return pow(x, y);
 }
 #elif SCANF_LOGN_POW
-INLINE maxfloat_t powi_(maxfloat_t x, intmax_t y) {
-    maxfloat_t r = (maxfloat_t)1;
+INLINE floatmax_t powi_(floatmax_t x, intmax_t y) {
+    floatmax_t r = (floatmax_t)1;
     for (; y > 0; y >>= 1) {
         if (y & 1) r *= x;
         x *= x;
@@ -530,8 +530,8 @@ INLINE maxfloat_t powi_(maxfloat_t x, intmax_t y) {
     return r;
 }
 #else
-INLINE maxfloat_t powi_(maxfloat_t x, intmax_t y) {
-    maxfloat_t r = (maxfloat_t)1;
+INLINE floatmax_t powi_(floatmax_t x, intmax_t y) {
+    floatmax_t r = (floatmax_t)1;
     for (; y > 0; --y)
         r *= x;
     return r;
@@ -540,9 +540,9 @@ INLINE maxfloat_t powi_(maxfloat_t x, intmax_t y) {
 
 /* s to floating point. negative controls flag, exp is E(+/-), hex = dec/hex..
    should return 0 if string empty */
-static maxfloat_t atolf_(const unsigned char* s, BOOL negative, intmax_t exp,
+static floatmax_t atolf_(const unsigned char* s, BOOL negative, intmax_t exp,
                         BOOL hex) {
-    maxfloat_t r = 0;
+    floatmax_t r = 0;
     int base = hex ? 16 : 10;
     while (isdigit(*s))
         r = r * base + ctodn_(*s++);
@@ -924,7 +924,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 MATCH_FAILURE();
 #else
             { /* =========== READ FLOAT =========== */
-                maxfloat_t r;
+                floatmax_t r;
                 unsigned char atof[SCANF_ATOF_BUFFER_SIZE], *di = atof;
                 intmax_t exp = 0;
                 int base = 10, k;
