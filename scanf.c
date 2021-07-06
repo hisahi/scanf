@@ -88,14 +88,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define SCANF_ASCII 1
 #endif
 
-#ifndef SCANF_INFINITE
-#if SCANF_C99 && !SCANF_NOMATH && defined(NAN) && defined(INFINITY)
-#define SCANF_INFINITE 1
-#else
-#define SCANF_INFINITE 0
-#endif
-#endif
-
 #ifndef SCANF_SATURATE
 #define SCANF_SATURATE 0
 #endif
@@ -110,6 +102,14 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #ifndef SCANF_NOMATH
 #define SCANF_NOMATH 1
+#endif
+
+#ifndef SCANF_INFINITE
+#if SCANF_C99 && !SCANF_NOMATH && defined(NAN) && defined(INFINITY)
+#define SCANF_INFINITE 1
+#else
+#define SCANF_INFINITE 0
+#endif
 #endif
 
 #ifndef SCANF_INTERNAL_CTYPE

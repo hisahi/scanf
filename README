@@ -61,7 +61,7 @@ implementation.
 Caveats:
 - Long length specifier for wide characters (%lc, %ls, %l[) is not supported.
   Read in multibyte characters and use mbstowcs yourself.
-  Perhaps I'll implement (w)*scanf functions and support %l* only there.
+  Perhaps I'll implement *wscanf functions and support %l* only there.
 - The only supported locale is the C locale; no locale-specific formatting
   is allowed.
 
