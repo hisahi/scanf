@@ -24,7 +24,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 */
 
-#include <ctype.h>
 #include <limits.h>
 #include <stddef.h>
 
@@ -69,10 +68,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 #endif
 
-#if !SCANF_NOMATH
-#include <math.h>
-#endif
-
 #define maxfloat_t long double
 
 #if SCANF_C99
@@ -111,6 +106,31 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #else
 #define SCANF_FAST_SCANSET 0
 #endif
+#endif
+
+#ifndef SCANF_NOMATH
+#define SCANF_NOMATH 1
+#endif
+
+#ifndef SCANF_INTERNAL_CTYPE
+#define SCANF_INTERNAL_CTYPE 0
+#endif
+
+#if !SCANF_ASCII
+#undef SCANF_INTERNAL_CTYPE
+#define SCANF_INTERNAL_CTYPE 0
+#endif
+
+#if !SCANF_NOMATH
+#include <math.h>
+#endif
+
+#if !SCANF_DISABLE_SUPPORT_FLOAT
+#include <float.h>
+#endif
+
+#if !SCANF_INTERNAL_CTYPE
+#include <ctype.h>
 #endif
 
 #ifndef EOF
@@ -194,6 +214,40 @@ INLINE int ctobn_(const char c, int b) {
         return ctodn_(c);
 }
 
+#if SCANF_INTERNAL_CTYPE
+INLINE int isspace(int c) {
+    switch (c) {
+    case ' ':
+    case '\t':
+    case '\n':
+    case '\v':
+    case '\f':
+    case '\r':
+        return 1;
+    }
+    return 0;
+}
+
+INLINE int isdigit(int c) {
+    return '0' <= c && c <= '9';
+}
+
+#if SCANF_INFINITE
+INLINE int isalpha(int c) {
+    return ('A' <= c && c <= 'Z') || ('a' <= c && c <= 'z');
+}
+
+INLINE int isalnum(int c) {
+    return isdigit(c) || isalpha(c);
+}
+
+INLINE int tolower(int c) {
+    return isalpha(c) ? c | 0x20 : c;
+}
+#endif
+
+#endif
+
 INLINE int isdigo_(const char c) {
 #if SCANF_ASCII
     return '0' <= c && c <= '7';
@@ -256,7 +310,6 @@ static uintmax_t atobn_(const char* s, int b) {
 }
 
 #if !SCANF_DISABLE_SUPPORT_FLOAT
-#include <float.h>
 
 #if !SCANF_NOMATH
 INLINE maxfloat_t pow10_(intmax_t y) {
@@ -519,7 +572,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 /* if buffer empty, could not read */
                 if (!*aton && !zero)
                     goto read_failure;
-                if (!*aton && zero)
+                else if (!*aton)
                     r = 0;
                 /* too many digits, overflow! */
                 else if (k >= SCANF_ATON_BUFFER_SIZE - 1)
@@ -741,7 +794,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 }
 
                 /* conversion */
-                if (!*atof && zero)
+                if (!*atof)
                     r = 0;
                 else if (base == 16)
                     r = atoxlf_(atof, negative, exp);
@@ -783,7 +836,12 @@ got_f_result:
             case 's': 
             {
                 char *outp = nostore ? NULL : va_arg(va, char *);
-                if (!maxlen) maxlen = (size_t)-1;
+                if (!maxlen)
+#if SCANF_SECURE
+                    goto read_failure;
+#else
+                    maxlen = (size_t)-1;
+#endif
 
                 /* skip whitespace. include in %n, but not elsewhere */
                 while (isspace(next)) {
@@ -814,7 +872,12 @@ got_f_result:
 #else
                 const unsigned char *set, *settmp;
 #endif
-                if (!maxlen) maxlen = (size_t)-1;
+                if (!maxlen)
+#if SCANF_SECURE
+                    goto read_failure;
+#else
+                    maxlen = (size_t)-1;
+#endif
                 ++f;
                 if (*f == '^')
                     invert = 1, ++f;

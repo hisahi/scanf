@@ -197,6 +197,7 @@ bool run_test(const std::string& name, int n, const std::string& input,
 #define TRY_TEST(...) do {                                                     \
         if (!run_test(__VA_ARGS__))                                            \
             return false;                                                      \
+        ++tests;                                                               \
     } while (0);
 
 /* 1, "42", "%d", int(42)... =
@@ -207,6 +208,7 @@ bool run_test(const std::string& name, int n, const std::string& input,
 */
 bool tests_ok() {
     std::cout << "Running scanf tests..." << std::endl;
+    int tests = 0;
 
     TRY_TEST("standard %d",
         1, "42", "%d", int(42));
@@ -488,17 +490,23 @@ bool tests_ok() {
         2, "a b", "%c\n\n%c", char('a'), char('b'));
 
     /* finally */
-    const char *s = "abc", *sp = s;
+    const char *s = "23abc", *sp = s;
+    int j;
     char buf[4];
-    if (0 != test::spscanf_(&sp, "%d"))
+    if (1 != test::spscanf_(&sp, "%d", &j))
         std::terminate();
     if (1 != test::spscanf_(&sp, "%4s", buf))
         std::terminate();
-    if (0 != std::strcmp(buf, s)) {
+    if (0 != std::strcmp(buf, s + 2)) {
         std::cout << "unget properly! " << buf << std::endl;
         return false;
     }
+    ++tests;
 
+    std::cout << "==========\n"
+                 "  ALL OK  \n"
+                 "==========" << std::endl;
+    std::cout << "Ran " << tests << " tests" << std::endl;
     return true;
 }
 

@@ -1,15 +1,16 @@
 
-WORK IN PROGRESS!
+WORK IN PROGRESS! Some things may still be buggy. Issues and pull requests
+are welcome.
 
 This is a freestanding implementation of scanf (the standard C library function
 for reading formatted input). It does not have any dependencies other than the
 C89 standard library, specifically the following headers:
-    <ctype.h>
     <limits.h>
     <stdarg.h>
     <stddef.h>
-    <float.h> (optional)
-    <math.h> (optional)
+    <ctype.h> (optional, if SCANF_INTERNAL_CTYPE = 0)
+    <float.h> (optional, if SCANF_DISABLE_SUPPORT_FLOAT = 0)
+    <math.h> (optional, if SCANF_NOMATH = 0)
     <stdint.h> (optional, C99 only)
 
 The prototypes for the scanf functions are the same as in the standard:
@@ -76,18 +77,28 @@ Defines:
     SCANF_DISABLE_SUPPORT_LONG_LONG (default: 1, or undefined if C99)
         Define as 1 to disable long long support
     SCANF_ASCII (default: 1)
-        Define as 0 if some ASCII invariants (such as digits 0-9 and letters
-        A-F being consecutive characters) cannot be assumed
-    SCANF_NOMATH (default: undefined)
-        Define as 1 to remove math.h dependency (for pow), which is only needed
-        for floating-point support. SCANF_NOMATH has no effect if
+        Define as 0 if the following ASCII invariants are not necessarily true
+            '0123456789' are consecutive characters
+            'ABCDEFGHIJKLMNOPQRSTUVWXYZ' are consecutive characters
+            'abcdefghijklmnopqrstuvwxyz' are consecutive characters
+            uppercase letter bitwise ORed with 0x20 converts into lowercase
+    SCANF_INTERNAL_CTYPE (default: 0)
+        Define as 1 to use internal ctype functions instead of including
+        <ctype.h>. Requires SCANF_ASCII.
+    SCANF_NOMATH (default: 1)
+        Define as 0 to use pow from <math.h> as a dependency. only needed
+        for floating-point support; SCANF_NOMATH has no effect if
         SCANF_DISABLE_SUPPORT_FLOAT is defined to be true.
+        Setting SCANF_NOMATH to 0 may speed up conversions to float.
     SCANF_INFINITE (default: 1 if C99 and SCANF_NOMATH not defined, else 0)
         Define as 1 to enable INFINITY/NAN support. Macros called INFINITY
         and NAN must be defined. SCANF_INFINITE has no effect if
         SCANF_DISABLE_SUPPORT_FLOAT is defined to be true.
     SCANF_FAST_SCANSET (default: 1 if CHAR_BIT == 8, else 0)
         Makes scanset scanning faster but takes up more memory.
+    SCANF_SECURE (default: 0)
+        Triggers a read failure if a %s or %[ format specifier does not specify
+        a maximum length/width.
 
 To use this library, simply include scanf.h, compile and link scanf.c into
 your program and implement getch_ as documented above.
