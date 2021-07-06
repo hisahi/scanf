@@ -91,10 +91,10 @@ Defines:
             'ABCDEFGHIJKLMNOPQRSTUVWXYZ' are consecutive characters
             'abcdefghijklmnopqrstuvwxyz' are consecutive characters
             uppercase letter bitwise ORed with 0x20 converts into lowercase
-    SCANF_INTERNAL_CTYPE (default: 0)
+    SCANF_INTERNAL_CTYPE (default: 1 if freestanding impl detected, else 0)
         Define as 1 to use internal ctype functions instead of including
         <ctype.h>. Requires SCANF_ASCII.
-    SCANF_NOMATH (default: 0)
+    SCANF_NOMATH (default: 1 if freestanding impl detected, else 0)
         Define as 1 to not use <math.h> as a dependency. It is only needed
         for floating-point support; SCANF_NOMATH has no effect if
         SCANF_DISABLE_SUPPORT_FLOAT is defined to be true.
