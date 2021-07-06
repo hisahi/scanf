@@ -29,6 +29,11 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "scanf.h"
 
+/* =============================== *
+ *        defines &  checks        *
+ * =============================== */
+
+/* C99/C++11 */
 #if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) \
     || (defined(__cplusplus) && __cplusplus >= 201103L)
 #define SCANF_C99 1
@@ -36,6 +41,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define SCANF_C99 0
 #endif
 
+/* stdint.h? */
 #ifndef SCANF_STDINT
 #if SCANF_C99
 #define SCANF_STDINT 1
@@ -54,6 +60,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 #include <stdint.h>
 #else
+/* (u)intmax_t, (U)INTMAX_(MIN_MAX) */
 #if SCANF_C99
 #ifndef intmax_t
 #define intmax_t long long int
@@ -89,11 +96,13 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 #endif
 
+/* long long? */
 #ifndef LLONG_MAX
 #undef SCANF_DISABLE_SUPPORT_LONG_LONG
 #define SCANF_DISABLE_SUPPORT_LONG_LONG 1
 #endif
 
+/* maximum precision floating point type */
 #define maxfloat_t long double
 
 #if SCANF_C99
@@ -102,6 +111,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define INLINE static
 #endif
 
+/* boolean type */
 #ifndef BOOL
 #if defined(__cplusplus)
 #define BOOL bool
@@ -112,6 +122,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 #endif
 
+/* freestanding? */
 #if defined(__STDC_HOSTED__) && __STDC_HOSTED__ == 0
 #define SCANF_FREESTANDING 1
 #else
@@ -166,10 +177,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define SCANF_LOGN_POW 1
 #endif
 
-#if !SCANF_ASCII
-#undef SCANF_INTERNAL_CTYPE
-#define SCANF_INTERNAL_CTYPE 0
-#endif
+/* include more stuff */
 
 #if !SCANF_INTERNAL_CTYPE
 #include <ctype.h>
@@ -279,6 +287,10 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 #endif
 
+/* =============================== *
+ *         digit conversion        *
+ * =============================== */
+
 INLINE_IF_ASCII int ctodn_(int c) {
 #if SCANF_ASCII
     return c - '0';
@@ -376,6 +388,10 @@ static int ctorn_(int c, int b) {
     }
 }
 
+/* =============================== *
+ *         character checks        *
+ * =============================== */
+
 #if SCANF_INTERNAL_CTYPE
 static int isspace(int c) {
     switch (c) {
@@ -391,10 +407,15 @@ static int isspace(int c) {
 }
 
 INLINE int isdigit(int c) {
+#if SCANF_ASCII
     return '0' <= c && c <= '9';
+#else
+    return ctodn_(c) >= 0;
+#endif
 }
 
 #if SCANF_INFINITE
+#if SCANF_ASCII
 INLINE int isalpha(int c) {
     return ('A' <= c && c <= 'Z') || ('a' <= c && c <= 'z');
 }
@@ -406,9 +427,12 @@ INLINE int isalnum(int c) {
 INLINE int tolower(int c) {
     return isalpha(c) ? c | 0x20 : c;
 }
-#endif
+#else
+#error SCANF_INTERNAL_CTYPE currently not fully implemented for SCANF_ASCII=0
+#endif /* SCANF_ASCII */
+#endif /* SCANF_INFINITE */
 
-#endif
+#endif /* SCANF_INTERNAL_CTYPE */
 
 INLINE int isdigo_(int c) {
 #if SCANF_ASCII
@@ -447,6 +471,10 @@ INLINE int isdigr_(int c, int b) {
     }
 }
 
+/* =============================== *
+ *       integer  conversion       *
+ * =============================== */
+
 /* convert unsigned integer in s in base b to integer r.
    returns 0 if OK, returns 1 if overflow (r not changed).
    should return 0 if string empty */
@@ -481,6 +509,10 @@ INLINE intmax_t atobn_(const unsigned char* s, BOOL negative, int b,
     else
         return negative ? -(intmax_t)r : (intmax_t)r;
 }
+
+/* =============================== *
+ *    floating point conversion    *
+ * =============================== */
 
 #if !SCANF_DISABLE_SUPPORT_FLOAT
 
@@ -540,12 +572,18 @@ static maxfloat_t atolf_(const unsigned char* s, BOOL negative, intmax_t exp,
     return r;
 }
 
-#endif
+#endif /* !SCANF_DISABLE_SUPPORT_FLOAT */
 
+/* =============================== *
+ *       main scanf function       *
+ * =============================== */
+
+/* enum for possible data types */
 enum dlength { LN_, LN_hh, LN_h, LN_l, LN_ll, LN_L, LN_j, LN_z, LN_t };
 #define vLNa_(x) LN_##x
 #define vLN_(x) vLNa_(x)
 
+/* EOF check, may be customized later for wide chars whatnot */
 #define IS_EOF(c) ((c) < 0)
 #define GOT_EOF() (IS_EOF(next))
 
@@ -861,7 +899,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                         else        STORE_DST(r, long long);
                         break;
 #endif
-#endif
+#endif /* SCANF_DISABLE_SUPPORT_LONG_LONG */
                     case LN_l:
 #if !LONG_IS_INT
                         if (unsign) STORE_DST(r, unsigned long);
@@ -946,7 +984,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     r = (negative ? -1 : 1) * INFINITY;
                     goto got_f_result;
                 }
-#endif
+#endif /* SCANF_INFINITE */
 
                 /* 0x for hex floats */
                 if (KEEP_READING() && next == '0') {
@@ -1048,7 +1086,7 @@ got_f_result:
                 }
             } /* =========== READ FLOAT =========== */
                 break;
-#endif
+#endif /* SCANF_DISABLE_SUPPORT_FLOAT */
             case 'c': 
             { /* =========== READ CHAR =========== */
                 char *outp = (char *)dst;
@@ -1123,11 +1161,11 @@ got_f_result:
                 }
                 if (hyphen)
                     mention['-'] = 1;
-#else
+#else /* SCANF_FAST_SCANSET */
                 set = f;
                 while (*f && *f != ']')
                     ++f;
-#endif
+#endif /* SCANF_FAST_SCANSET */
                 while (KEEP_READING()) {
 #if SCANF_FAST_SCANSET
                     if (mention[next] == invert) break;
@@ -1155,7 +1193,7 @@ got_f_result:
                     }
                     if (hyphen && next == '-') found = 1;
                     if (found == invert) break;
-#endif
+#endif /* SCANF_FAST_SCANSET */
                     if (!nostore) *outp++ = (char)(unsigned char)next;
                     NEXT_CHAR(nowread);
                 }
@@ -1181,6 +1219,10 @@ read_failure:
         ungetch(next, p);
     return (tryconv && match) ? EOF : fields;
 }
+
+/* =============================== *
+ *        wrapper functions        *
+ * =============================== */
 
 static int getchw_(void* arg) {
     return getch_();
