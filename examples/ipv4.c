@@ -31,20 +31,32 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
    custom format specifiers for reading an IPv4 address and returning it as
    a uint32_t. */
 
+enum rescanf_state { RESCANF_BUFFER, RESCANF_STREAM, RESCANF_EOF };
+
 struct rescanf_tmp {
-    void *udata;
     int (*getch)(void *data);
+    void *udata;
     int next;
+    enum rescanf_state state;
 };
 
 int rescanf_getch_(void *data) {
     struct rescanf_tmp *rsf = (struct rescanf_tmp *)data;
-    if (rsf->next >= 0) {
-        int c = rsf->next;
-        rsf->next = -1;
-        return c;
+    int c;
+    switch (rsf->state) {
+    case RESCANF_BUFFER:
+        c = rsf->next;
+        rsf->state = RESCANF_STREAM;
+        break;
+    case RESCANF_STREAM:
+        c = rsf->getch(rsf->udata);
+        if (c < 0)
+            rsf->state = RESCANF_EOF;
+        break;
+    case RESCANF_EOF:
+        c = -1;
     }
-    return rsf->getch(rsf->udata);
+    return c;
 }
 
 void rescanf_ungetch_(int ch, void *data) {
@@ -62,6 +74,7 @@ int rescanf(int (*getch)(void *data), void *data, int *next,
     tmp.udata = data;
     tmp.getch = getch;
     tmp.next = *next;
+    tmp.state = tmp.next < 0 ? RESCANF_EOF : RESCANF_BUFFER;
     r = vfctscanf(&rescanf_getch_, &rescanf_ungetch_, &tmp, format, va);
     va_end(va);
     *next = tmp.next;
