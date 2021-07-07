@@ -69,8 +69,8 @@ Known caveats:
   At some point if there is enough demand, I'll probably implement a
   wscanf.c/wscanf.h that comes with wide functions (w*) as well as multibyte
   ones, but requires more functions (getwch_, ungetwch_, mbrtowc_, wcrtomb_)
-- Long floating point numbers might not be converted correctly if they do not
-  fit into the buffer.
+  to be implemented.
+- Floating-point conversion may still suffer from some issues for edge cases.
 - The only supported locale is the C locale; no locale-specific formatting
   is allowed.
 
