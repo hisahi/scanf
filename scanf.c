@@ -141,22 +141,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define SCANF_BINARY 1
 #endif
 
-#ifndef SCANF_ATON_BUFFER_SIZE
-#if SCANF_BINARY
-#define SCANF_ATON_BUFFER_SIZE 72
-#else
-#define SCANF_ATON_BUFFER_SIZE 32
-#endif
-#endif
-
-#ifndef SCANF_ATOD_BUFFER_SIZE
-#define SCANF_ATOD_BUFFER_SIZE 32
-#endif
-
-#ifndef SCANF_ATOF_BUFFER_SIZE
-#define SCANF_ATOF_BUFFER_SIZE 48
-#endif
-
 #ifndef SCANF_ASCII
 #define SCANF_ASCII 1
 #endif
@@ -472,46 +456,7 @@ INLINE int isdigr_(int c, int b) {
 }
 
 /* =============================== *
- *       integer  conversion       *
- * =============================== */
-
-/* convert unsigned integer in s in base b to integer r.
-   returns 0 if OK, returns 1 if overflow (r not changed).
-   should return 0 if string empty */
-static int atobui_(const unsigned char* s, int b, uintmax_t* r) {
-    char c;
-    uintmax_t tr = 0, pr = 0;
-    while ((c = *s++)) {
-        tr *= b;
-        if (tr < pr)
-            return 1;
-        pr = tr;
-        tr += ctorn_(c, b);
-    }
-    *r = tr;
-    return 0;
-}
-
-/* convert string to unsigned int.
-   b = radix, ovf = maximum value (overflow) */
-INLINE uintmax_t atobu_(const unsigned char* s, int b, uintmax_t ovf) {
-    uintmax_t r;
-    return atobui_(s, b, &r) ? ovf : r;
-}
-
-/* convert string to signed int. negative flag controls if int is negative.
-   b = radix, uvf = minimum value (underflow), ovf = maximum value (overflow) */
-INLINE intmax_t atobn_(const unsigned char* s, BOOL negative, int b,
-                        intmax_t uvf, intmax_t ovf) {
-    uintmax_t r;
-    if (atobui_(s, b, &r) || r > (uintmax_t)ovf)
-        return negative ? uvf : ovf;
-    else
-        return negative ? -(intmax_t)r : (intmax_t)r;
-}
-
-/* =============================== *
- *    floating point conversion    *
+ *       floating point math       *
  * =============================== */
 
 #if !SCANF_DISABLE_SUPPORT_FLOAT
@@ -537,40 +482,6 @@ INLINE floatmax_t powi_(floatmax_t x, intmax_t y) {
     return r;
 }
 #endif
-
-/* s to floating point. negative controls flag, exp is E(+/-), hex = dec/hex..
-   should return 0 if string empty */
-static floatmax_t atolf_(const unsigned char* s, BOOL negative, intmax_t exp,
-                        BOOL hex) {
-    floatmax_t r = 0;
-    int base = hex ? 16 : 10;
-    while (isdigit(*s))
-        r = r * base + ctodn_(*s++);
-    if (*s == '.') {
-        int sub = hex ? 4 : 1;
-        ++s;
-        while (isdigit(*s))
-            r = r * base + ctodn_(*s++), exp -= sub;
-    }
-
-    if (r != 0) {
-        if (exp > 0) {
-#ifdef INFINITY
-            if (exp > (hex ? LDBL_MAX_EXP : LDBL_MAX_10_EXP))
-                r = INFINITY;
-            else
-#endif
-                r *= (hex ? powi_(2, exp) : powi_(10, exp));
-        } else if (exp < 0) {
-            if (exp < (hex ? LDBL_MIN_EXP : LDBL_MIN_10_EXP))
-                r = 0;
-            else
-                r /= (hex ? powi_(2, -exp) : powi_(10, -exp));
-        }
-    }
-    if (negative) r = -r;
-    return r;
-}
 
 #endif /* !SCANF_DISABLE_SUPPORT_FLOAT */
 
@@ -660,14 +571,23 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
 
             /* width specifier => maxlen */
             if (isdigit(*f)) {
-                unsigned char aton[SCANF_ATOD_BUFFER_SIZE], *di = aton;
-                int k;
+                BOOL ovf = 0;
+                size_t pr = 0;
                 while (*f == '0')
                     ++f;
-                for (k = 0; isdigit(*f) && k < SCANF_ATOD_BUFFER_SIZE - 1; ++k)
-                    *di++ = *f++;
-                *di = 0;
-                maxlen = (size_t)atobu_(aton, 10, UINTMAX_MAX);
+                while (isdigit(*f)) {
+                    if (!ovf) {
+                        maxlen *= 10;
+                        if (maxlen < pr) {
+                            maxlen = (size_t)UINTMAX_MAX;
+                            ovf = 1;
+                        } else {
+                            pr = maxlen;
+                            maxlen += ctodn_(*f);
+                        }
+                    }
+                    ++f;
+                }
             }
 
             /* length specifier */
@@ -807,18 +727,18 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     /* fall-through */
             readptr:
                 {
-                    /* allow empty = zero? */
-                    BOOL zero = 0;
-                    unsigned char aton[SCANF_ATON_BUFFER_SIZE], *di = aton;
-                    int k;
+                    intmax_t pr;
+                    /* read digits? overflow? */
+                    BOOL digit = 0, ovf = 0;
                     if (!maxlen) maxlen = (size_t)-1;
+                    pr = r = 0;
 
                     /* detect base from string for %i, skip 0x for %x,
                                                      demand 0x for %p */
                     if (c == 'i' || c == 'x' || c == 'X' || c == 'p') {
                         BOOL notfoundhex = isptr;
                         if (KEEP_READING() && next == '0') {
-                            zero = 1;
+                            digit = 1;
                             NEXT_CHAR(nowread);
                             if (KEEP_READING() && (next == 'x' ||
                                                    next == 'X')) {
@@ -832,28 +752,47 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                         if (notfoundhex)
                             MATCH_FAILURE();
                     }
+                    
                     /* skip initial zeros */
                     while (KEEP_READING() && next == '0') {
                         NEXT_CHAR(nowread);
-                        zero = 1;
+                        digit = 1;
                     }
-                    /* read numbers into buffer */
-                    for (k = 0; KEEP_READING() && isdigr_(next, base);) {
-                        if (k < SCANF_ATON_BUFFER_SIZE - 1)
-                            *di++ = next, ++k;
+                    /* read digits and convert to integer */
+                    while (KEEP_READING() && isdigr_(next, base)) {
+                        if (!ovf) {
+                            r *= base;
+                            if ((uintmax_t)r < (uintmax_t)pr) {
+                                ovf = 1;
+                            } else {
+                                pr = r;
+                                r += ctorn_(next, base);
+                            }
+                            digit = 1;
+                        }
                         NEXT_CHAR(nowread);
                     }
-                    *di = 0;
-
-                    /* if buffer empty, could not read */
-                    if (!*aton && !zero)
+                    
+                    /* if no digits read? */
+                    if (!digit)
                         MATCH_FAILURE();
-                    /* too many digits, overflow! */
-                    else if (k >= SCANF_ATON_BUFFER_SIZE - 1)
-                        r = negative ? INTMAX_MIN : INTMAX_MAX;
-                    else
-                        r = atobn_(aton, negative, base,
-                                   INTMAX_MIN, INTMAX_MAX);
+
+                    /* overflow detection, negation, etc. */
+                    if (unsign) {
+                        if (ovf)
+                            r = (intmax_t)UINTMAX_MAX;
+                        else if (negative)
+                            r = -r;
+                    } else {
+                        if (ovf || r < 0)
+                            r = negative ? INTMAX_MIN : INTMAX_MAX;
+                        else if (negative) {
+                            r = -r;
+                            if (r >= 0)
+                                r = INTMAX_MIN;
+                        }
+                    }
+
                     MATCH_SUCCESS();
 
                     if (nostore)
@@ -924,14 +863,12 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 MATCH_FAILURE();
 #else
             { /* =========== READ FLOAT =========== */
-                floatmax_t r;
-                unsigned char atof[SCANF_ATOF_BUFFER_SIZE], *di = atof;
-                intmax_t exp = 0;
-                int base = 10, k;
+                floatmax_t r = 0, pr = 0;
+                intmax_t off = 0, exp = 0;
+                int base = 10, sub = 0;
                 unsigned char explc = 'e', expuc = 'E';
-                size_t leftover = 0;
-                /* negative? found zero? allow dot? */
-                BOOL negative = 0, zero = 0, dot = 0;
+                /* negative? allow dot? read >0 digits? overflow? hex mode? */
+                BOOL negative = 0, dot = 0, digit = 0, ovf = 0, hex = 0;
                 if (!maxlen) maxlen = (size_t)-1;
                 
                 switch (next) {
@@ -972,6 +909,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     NEXT_CHAR(nowread);
                     /* try reading the rest */
                     if (KEEP_READING()) {
+                        int k;
                         const char *rest2 = "INITY";
                         for (k = 0; k < 5; ++k) {
                             if (!KEEP_READING() ||
@@ -989,8 +927,10 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 /* 0x for hex floats */
                 if (KEEP_READING() && next == '0') {
                     NEXT_CHAR(nowread);
+                    digit = 1;
                     if (KEEP_READING() && (next == 'x' || next == 'X')) {
                         base = 16;
+                        hex = 1;
                         explc = 'p', expuc = 'P';
                         NEXT_CHAR(nowread);
                     }
@@ -998,31 +938,35 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
 
                 while (KEEP_READING() && next == '0') {
                     NEXT_CHAR(nowread);
-                    zero = 1;
+                    digit = 1;
                 }
-                /* copy strings of digits + decimal point to buffer */
-                for (k = 0; KEEP_READING() && (isdigr_(next, base)
-                                    || (next == '.' && !dot));) {
-                    if (k < SCANF_ATOF_BUFFER_SIZE - 1)
-                        *di++ = next, ++k;
-                    else if (!dot)
-                        ++leftover;
+                
+                /* read digits and convert */
+                while (KEEP_READING() && (isdigr_(next, base) ||
+                                         (next == '.' && !dot))) {
                     if (next == '.')
-                        dot = 1;
+                        dot = 1, sub = hex ? 4 : 1;
+                    else if (!ovf) {
+                        r *= base;
+                        if (r > 0 && r == pr) {
+                            ovf = 1;
+                        } else {
+                            pr = r;
+                            r += ctorn_(next, base);
+                            off += sub;
+                        }
+                        digit = 1;
+                    }
                     NEXT_CHAR(nowread);
                 }
-                *di = 0;
-                /* if buffer empty, could not read */
-                if (!*atof && !zero)
-                    MATCH_FAILURE();
-                /* float cannot just be a decimal point! */
-                if (dot && k == 1)
+                /* read no digits? */
+                if (!digit)
                     MATCH_FAILURE();
 
                 /* exponent? */
                 if (KEEP_READING() && (next == explc || next == expuc)) {
-                    BOOL eneg = 0, ezero = 0;
-                    unsigned char aton[SCANF_ATOD_BUFFER_SIZE], *edi = aton;
+                    BOOL eneg = 0, edigit = 0, eovf = 0;
+                    intmax_t pe = 0;
                     NEXT_CHAR(nowread);
                     if (KEEP_READING()) {
                         switch (next) {
@@ -1036,32 +980,56 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     /* skip initial zeros */
                     while (KEEP_READING() && next == '0') {
                         NEXT_CHAR(nowread);
-                        ezero = 1;
+                        edigit = 1;
                     }
-                    /* read into buffer */
-                    for (k = 0; KEEP_READING() && isdigit(next);) {
-                        if (k < SCANF_ATOF_BUFFER_SIZE - 1)
-                            *edi++ = next, ++k;
+                    /* read exp from stream */
+                    while (KEEP_READING() && isdigit(next)) {
+                        if (!eovf) {
+                            exp *= 10;
+                            if ((uintmax_t)exp < (uintmax_t)pe) {
+                                eovf = 1;
+                            } else {
+                                pe = exp;
+                                exp += ctodn_(next);
+                            }
+                            edigit = 1;
+                        }
                         NEXT_CHAR(nowread);
                     }
-                    *edi = 0;
-                    if (!*aton && !ezero)
+                    if (!edigit)
                         MATCH_FAILURE();
-                    /* overflow? */
-                    else if (k >= SCANF_ATOD_BUFFER_SIZE - 1)
+                    /* overflow detection, negation, etc. */
+                    if (eovf || exp < 0)
                         exp = eneg ? INTMAX_MIN : INTMAX_MAX;
-                    else
-                        exp = atobn_(aton, eneg, 10, INTMAX_MIN, INTMAX_MAX);
+                    else if (eneg) {
+                        exp = -exp;
+                        if (exp >= 0)
+                            exp = INTMAX_MIN;
+                    }
                 }
 
-                if (leftover) {
+                if (dot) {
                     intmax_t oexp = exp;
-                    exp += leftover * (base == 16 ? 4 : 1);
-                    if (exp < oexp) exp = INTMAX_MAX; /* overflow protection */
+                    exp -= off;
+                    if (exp > oexp) exp = INTMAX_MIN; /* overflow protection */
                 }
 
-                /* conversion */
-                r = atolf_(atof, negative, exp, base == 16);
+                if (r != 0) {
+                    if (exp > 0) {
+#ifdef INFINITY
+                        if (exp > (hex ? LDBL_MAX_EXP : LDBL_MAX_10_EXP))
+                            r = INFINITY;
+                        else
+#endif
+                            r *= (hex ? powi_(2, exp) : powi_(10, exp));
+                    } else if (exp < 0) {
+                        if (exp < (hex ? LDBL_MIN_EXP : LDBL_MIN_10_EXP))
+                            r = 0;
+                        else
+                            r /= (hex ? powi_(2, -exp) : powi_(10, -exp));
+                    }
+                }
+                if (negative) r = -r;
 
 #if SCANF_INFINITE
 got_f_result:
