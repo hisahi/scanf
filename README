@@ -32,6 +32,7 @@ ungetch_ shall push a character back into the stream such that the next getch_
 call will return the character pushed. ungetch_ will not be called more than
 once for every *scanf call, nor will it be called more than once between calls
 to getch_, nor will it be called before getch_ has been called at least once.
+ungetch_ will only be called with values that getch_ can return, except EOF.
 
 In addition, a function that takes in two function pointers is available:
 
@@ -64,12 +65,8 @@ on portability and robustness, while secondary focus is on maximizing
 performance and minimizing code size.
 
 Known caveats:
-- Long length specifier for wide characters (%lc, %ls, %l[) is not supported.
-  Read in multibyte characters and use mbstowcs yourself.
-  At some point if there is enough demand, I'll probably implement a
-  wscanf.c/wscanf.h that comes with wide functions (w*) as well as multibyte
-  ones, but requires more functions (getwch_, ungetwch_, mbrtowc_, wcrtomb_)
-  to be implemented.
+- Long length specifier for wide characters (%lc, %ls, %l[) is not supported
+  by default, but has to be enabled separately. See WCHAR.
 - Floating-point conversion may still suffer from some issues for edge cases.
 - The only supported locale is the C locale; no locale-specific formatting
   is allowed.
@@ -77,6 +74,12 @@ Known caveats:
 To use this library, simply include scanf.h, compile and link scanf.c into
 your program and implement getch_ and ungetch_ as documented above. You may
 also want to look at the defines below to customize your build.
+
+Note that scanf.h defines macros to map scanf etc. to the actual function names
+(scanf_). To avoid this, define SCANF_NODEFINE, or SCANF_NOCOLLIDE to only avoid
+those names that collide with those of the C standard library. Alternatively
+make sure scanf.h is always included after <stdio.h> (and/or <wchar.h>), should
+you need both in your program.
 
 Defines:
     SCANF_DISABLE_SUPPORT_FLOAT (default: undefined = 0)
@@ -120,6 +123,8 @@ Defines:
         specify a maximum length/width.
     SCANF_EXTENSIONS (default: undefined = 0)
         Enables the extension engine. See EXTENSIONS.
+    SCANF_WIDE (default: 0)
+        See WCHAR.
 
 You can also redefine EOF for scanf.c; by default it is defined as -1.
 
