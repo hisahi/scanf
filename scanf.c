@@ -102,6 +102,29 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define SCANF_DISABLE_SUPPORT_LONG_LONG 1
 #endif
 
+/* define uintptr_t if not already defined */
+#if !defined(UINTPTR_MAX)
+#if sizeof(void *) <= sizeof(unsigned char)
+#define uintptr_t unsigned char
+#elif sizeof(void *) <= sizeof(unsigned short)
+#define uintptr_t unsigned short
+#elif sizeof(void *) <= sizeof(unsigned int)
+#define uintptr_t unsigned int
+#elif sizeof(void *) <= sizeof(unsigned long)
+#define uintptr_t unsigned long
+#endif
+
+#if !defined(uintptr_t) && defined(ULLONG_MAX)
+#if sizeof(void *) <= sizeof(unsigned long long)
+#define uintptr_t unsigned long long
+#endif
+#endif
+
+#ifndef uintptr_t
+#define uintptr_t uintmax_t
+#endif
+#endif
+
 /* maximum precision floating point type */
 #define floatmax_t long double
 
@@ -683,7 +706,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                         MATCH_SUCCESS();
                         if (!nostore) {
                             ++fields;
-                            r = (intmax_t)NULL;
+                            r = (intmax_t)(uintmax_t)(uintptr_t)NULL;
                             goto storenum;
                         }
                         break;
@@ -802,7 +825,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
             storenum:
                 /* store number, either as ptr, unsigned or signed */
                 if (isptr)
-                    STORE_DST(r, void *);
+                    STORE_DST((uintptr_t)(uintmax_t)r, void *);
                 else {
                     switch (dlen) {
                     case LN_hh:
