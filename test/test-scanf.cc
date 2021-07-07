@@ -41,6 +41,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "../scanf.h"
 
 namespace test {
+/* you can add defines here to test */
 #include "../scanf.c"
 extern "C" {
 int getch_() {
@@ -48,6 +49,11 @@ int getch_() {
 }
 
 void ungetch_(int) { }
+}
+
+int scnext_(int (*getch)(void *data), void *data, const char **format,
+            int *buffer, int length, int nostore, void *destination) {
+    return 1;
 }
 };
 

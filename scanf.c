@@ -102,29 +102,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define SCANF_DISABLE_SUPPORT_LONG_LONG 1
 #endif
 
-/* define uintptr_t if not already defined */
-#if !defined(UINTPTR_MAX)
-#if sizeof(void *) <= sizeof(unsigned char)
-#define uintptr_t unsigned char
-#elif sizeof(void *) <= sizeof(unsigned short)
-#define uintptr_t unsigned short
-#elif sizeof(void *) <= sizeof(unsigned int)
-#define uintptr_t unsigned int
-#elif sizeof(void *) <= sizeof(unsigned long)
-#define uintptr_t unsigned long
-#endif
-
-#if !defined(uintptr_t) && defined(ULLONG_MAX)
-#if sizeof(void *) <= sizeof(unsigned long long)
-#define uintptr_t unsigned long long
-#endif
-#endif
-
-#ifndef uintptr_t
-#define uintptr_t uintmax_t
-#endif
-#endif
-
 /* maximum precision floating point type */
 #define floatmax_t long double
 
@@ -164,8 +141,17 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define SCANF_BINARY 1
 #endif
 
+/* this is technically UB, as the character encodings used by the preprocessor
+   and the actual compiled code might be different. in practice this is hardly 
+   ever an issue, and if it is, you can just define SCANF_ASCII manually */
 #ifndef SCANF_ASCII
+#if 'B' - 'A' ==  1 && 'K' - 'A' == 10 && 'Z' - 'A' == 25                      \
+ && 'a' - 'A' == 32 && 'n' - 'N' == 32 && 'v' - 'V' == 32 && 'z' - 'Z' == 32   \
+ && '3' - '0' ==  3 && '9' - '0' ==  9
 #define SCANF_ASCII 1
+#else
+#define SCANF_ASCII 0
+#endif
 #endif
 
 #ifndef SCANF_FAST_SCANSET
@@ -292,6 +278,12 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
                   && DBL_MAX_EXP == LDBL_MAX_EXP
 #define LDOUBLE_IS_DOUBLE 1
 #endif
+#endif
+
+#ifdef UINTPTR_MAX
+#define INT_TO_PTR(x) ((void*)(uintptr_t)(uintmax_t)(x))
+#else
+#define INT_TO_PTR(x) ((void*)(uintmax_t)(x))
 #endif
 
 /* =============================== *
@@ -508,6 +500,27 @@ INLINE floatmax_t powi_(floatmax_t x, intmax_t y) {
 
 #endif /* !SCANF_DISABLE_SUPPORT_FLOAT */
 
+#if SCANF_EXTENSIONS
+struct scanf_ext_tmp {
+    int (*getch)(void *data);
+    void *data;
+    size_t len;
+};
+
+int scnext_(int (*getch)(void *data), void *data, const char **format,
+            int *buffer, int length, int nostore, void *destination);
+
+int scanf_ext_getch_(void *data) {
+    struct scanf_ext_tmp *st = (struct scanf_ext_tmp *)data;
+    if (!st->len)
+        return -1;
+    else {
+        --st->len;
+        return st->getch(st->data);
+    }
+}
+#endif
+
 /* =============================== *
  *       main scanf function       *
  * =============================== */
@@ -521,8 +534,8 @@ enum dlength { LN_, LN_hh, LN_h, LN_l, LN_ll, LN_L, LN_j, LN_z, LN_t };
 #define IS_EOF(c) ((c) < 0)
 #define GOT_EOF() (IS_EOF(next))
 
-static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
-                   void* p, const char* ff, va_list va) {
+static int iscanf_(int (*getch)(void *p), void (*ungetch)(int c, void *p),
+                   void *p, const char *ff, va_list va) {
     /* fields = number of fields successfully read; this is the return value */
     /* next = the "next" character to be processed, initially -1 */
     int fields = 0, next;
@@ -553,7 +566,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
         /* signal match failure and exit loop */
 #define MATCH_FAILURE() do { if (!GOT_EOF()) match = 0; \
                              goto read_failure; } while (0)
-        /* signal input failure and exit loop */
+        /* signal input f ailure and exit loop */
 #define INPUT_FAILURE() do { goto read_failure; } while (0)
 
         if (isspace(c)) {
@@ -612,6 +625,32 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     ++f;
                 }
             }
+
+#if SCANF_EXTENSIONS
+            if (*f == '!') {
+                const char *sf = (const char *)(f + 1);
+                BOOL hadlen = maxlen != 0;
+                struct scanf_ext_tmp tmp;
+                int ok;
+
+                if (!hadlen)
+                    maxlen = SIZE_MAX;
+                tmp.getch = getch;
+                tmp.data = p;
+                tmp.len = SIZE_MAX;
+                ok = scnext_(&scanf_ext_getch_, &tmp, &sf, &next,
+                             hadlen, nostore, dst);
+                f = (const unsigned char *)sf;
+                if (ok < 0)
+                    INPUT_FAILURE();
+                else if (ok > 0)
+                    MATCH_FAILURE();
+                else if (!nostore)
+                    ++fields;
+                read_chars += maxlen - tmp.len;
+                continue;
+            }
+#endif
 
             /* length specifier */
             switch (*f++) {
@@ -689,14 +728,18 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 /* is negative? */
                 BOOL negative;
                 /* result */
-                intmax_t r;
+                union {
+                    intmax_t i;
+                    void *p;
+                } r;
+                /* result if pointer */
                 
             case 'p': /* pointer */
                     isptr = 1;
                     if (next == '(') { /* handle (nil) */
                         int k;
                         const char *rest = "nil)";
-                        if (!maxlen) maxlen = (size_t)-1;
+                        if (!maxlen) maxlen = SIZE_MAX;
                         NEXT_CHAR(nowread);
                         for (k = 0; k < 4; ++k) {
                             if (!KEEP_READING() || next != rest[k])
@@ -706,8 +749,8 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                         MATCH_SUCCESS();
                         if (!nostore) {
                             ++fields;
-                            r = (intmax_t)(uintmax_t)(uintptr_t)NULL;
-                            goto storenum;
+                            r.p = NULL;
+                            goto storeptr;
                         }
                         break;
                     }
@@ -716,7 +759,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
             case 'n': /* number of characters read */
                     if (nostore)
                         break;
-                    r = (intmax_t)read_chars;
+                    r.i = (intmax_t)read_chars;
                     unsign = 0, isptr = 0;
                     goto storenum;
             case 'o': /* unsigned octal integer */
@@ -753,8 +796,8 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     intmax_t pr;
                     /* read digits? overflow? */
                     BOOL digit = 0, ovf = 0;
-                    if (!maxlen) maxlen = (size_t)-1;
-                    pr = r = 0;
+                    if (!maxlen) maxlen = SIZE_MAX;
+                    pr = r.i = 0;
 
                     /* detect base from string for %i, skip 0x for %x,
                                                      demand 0x for %p */
@@ -784,12 +827,12 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     /* read digits and convert to integer */
                     while (KEEP_READING() && isdigr_(next, base)) {
                         if (!ovf) {
-                            r *= base;
-                            if ((uintmax_t)r < (uintmax_t)pr) {
+                            r.i *= base;
+                            if ((uintmax_t)r.i < (uintmax_t)pr) {
                                 ovf = 1;
                             } else {
-                                pr = r;
-                                r += ctorn_(next, base);
+                                pr = r.i;
+                                r.i += ctorn_(next, base);
                             }
                             digit = 1;
                         }
@@ -803,16 +846,16 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                     /* overflow detection, negation, etc. */
                     if (unsign) {
                         if (ovf)
-                            r = (intmax_t)UINTMAX_MAX;
+                            r.i = (intmax_t)UINTMAX_MAX;
                         else if (negative)
-                            r = -r;
+                            r.i = -r.i;
                     } else {
-                        if (ovf || r < 0)
-                            r = negative ? INTMAX_MIN : INTMAX_MAX;
+                        if (ovf || r.i < 0)
+                            r.i = negative ? INTMAX_MIN : INTMAX_MAX;
                         else if (negative) {
-                            r = -r;
-                            if (r >= 0)
-                                r = INTMAX_MIN;
+                            r.i = -r.i;
+                            if (r.i >= 0)
+                                r.i = INTMAX_MIN;
                         }
                     }
 
@@ -824,53 +867,55 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 }
             storenum:
                 /* store number, either as ptr, unsigned or signed */
-                if (isptr)
-                    STORE_DST((uintptr_t)(uintmax_t)r, void *);
-                else {
+                if (isptr) {
+                    r.p = INT_TO_PTR(r.i);
+            storeptr:
+                    STORE_DST(r.p, void *);
+                } else {
                     switch (dlen) {
                     case LN_hh:
-                        if (unsign) STORE_DST(r, unsigned char);
-                        else        STORE_DST(r, signed char);
+                        if (unsign) STORE_DST(r.i, unsigned char);
+                        else        STORE_DST(r.i, signed char);
                         break;
 #if !SHORT_IS_INT
                     case LN_h: /* if SHORT_IS_INT, match fails => default: */
-                        if (unsign) STORE_DST(r, unsigned short);
-                        else        STORE_DST(r, short);
+                        if (unsign) STORE_DST(r.i, unsigned short);
+                        else        STORE_DST(r.i, short);
                         break;
 #endif
 #ifndef INTMAXT_ALIAS
                     case LN_j:
-                        if (unsign) STORE_DST(r, uintmax_t);
-                        else        STORE_DST(r, intmax_t);
+                        if (unsign) STORE_DST(r.i, uintmax_t);
+                        else        STORE_DST(r.i, intmax_t);
                         break;
 #endif
 #ifndef SIZET_ALIAS
                     case LN_z:
-                        STORE_DST(r, size_t);
+                        STORE_DST(r.i, size_t);
                         break;
 #endif
 #ifndef PTRDIFFT_ALIAS
                     case LN_t:
-                        STORE_DST(r, ptrdiff_t);
+                        STORE_DST(r.i, ptrdiff_t);
                         break;
 #endif
 #if !SCANF_DISABLE_SUPPORT_LONG_LONG
                     case LN_ll:
 #if !LLONG_IS_LONG
-                        if (unsign) STORE_DST(r, unsigned long long);
-                        else        STORE_DST(r, long long);
+                        if (unsign) STORE_DST(r.i, unsigned long long);
+                        else        STORE_DST(r.i, long long);
                         break;
 #endif
 #endif /* SCANF_DISABLE_SUPPORT_LONG_LONG */
                     case LN_l:
 #if !LONG_IS_INT
-                        if (unsign) STORE_DST(r, unsigned long);
-                        else        STORE_DST(r, long);
+                        if (unsign) STORE_DST(r.i, unsigned long);
+                        else        STORE_DST(r.i, long);
                         break;
 #endif
                     default:
-                        if (unsign) STORE_DST(r, unsigned);
-                        else        STORE_DST(r, int);
+                        if (unsign) STORE_DST(r.i, unsigned);
+                        else        STORE_DST(r.i, int);
                     }
                 }
                 break;
@@ -892,7 +937,7 @@ static int iscanf_(int (*getch)(void* p), void (*ungetch)(int c, void* p),
                 unsigned char explc = 'e', expuc = 'E';
                 /* negative? allow dot? read >0 digits? overflow? hex mode? */
                 BOOL negative = 0, dot = 0, digit = 0, ovf = 0, hex = 0;
-                if (!maxlen) maxlen = (size_t)-1;
+                if (!maxlen) maxlen = SIZE_MAX;
                 
                 switch (next) {
                 case '-':
@@ -1099,7 +1144,7 @@ got_f_result:
 #if SCANF_SECURE
                     MATCH_FAILURE();
 #else
-                    maxlen = (size_t)-1;
+                    maxlen = SIZE_MAX;
 #endif
 
                 while (KEEP_READING() && !isspace(next)) {
@@ -1129,7 +1174,7 @@ got_f_result:
 #if SCANF_SECURE
                     MATCH_FAILURE();
 #else
-                    maxlen = (size_t)-1;
+                    maxlen = SIZE_MAX;
 #endif
                 ++f;
                 if (*f == '^')
@@ -1215,25 +1260,21 @@ read_failure:
  *        wrapper functions        *
  * =============================== */
 
-static int getchw_(void* arg) {
+#if !SCANF_SSCANF_ONLY
+
+static int getchw_(void *arg) {
     return getch_();
 }
 
-static void ungetchw_(int c, void* arg) {
+static void ungetchw_(int c, void *arg) {
     ungetch_(c);
 }
 
-static int sscanw_(void* arg) {
-    const unsigned char **p = (const unsigned char **)arg;
-    const unsigned char c = *(*p)++;
-    return c ? c : EOF;
-}
-
-int vscanf_(const char* format, va_list arg) {
+int vscanf_(const char *format, va_list arg) {
     return iscanf_(&getchw_, &ungetchw_, NULL, format, arg);
 }
 
-int scanf_(const char* format, ...) {
+int scanf_(const char *format, ...) {
     int r;
     va_list va;
     va_start(va, format);
@@ -1242,14 +1283,32 @@ int scanf_(const char* format, ...) {
     return r;
 }
 
-int vspscanf_(const char **sp, const char* format, va_list arg) {
+#else
+
+int vscanf_(const char *format, va_list arg) {
+    return EOF;
+}
+
+int scanf_(const char *format, ...) {
+    return EOF;
+}
+
+#endif
+
+static int sscanw_(void *arg) {
+    const unsigned char **p = (const unsigned char **)arg;
+    const unsigned char c = *(*p)++;
+    return c ? c : EOF;
+}
+
+int vspscanf_(const char **sp, const char *format, va_list arg) {
     int i = iscanf_(&sscanw_, NULL, sp, format, arg);
     --*sp; /* back up by one character, even if it was EOF we want the pointer
               at the null terminator */
     return i;
 }
 
-int spscanf_(const char **sp, const char* format, ...) {
+int spscanf_(const char **sp, const char *format, ...) {
     int r;
     va_list va;
     va_start(va, format);
@@ -1258,11 +1317,11 @@ int spscanf_(const char **sp, const char* format, ...) {
     return r;
 }
 
-int vsscanf_(const char *s, const char* format, va_list arg) {
+int vsscanf_(const char *s, const char *format, va_list arg) {
     return iscanf_(&sscanw_, NULL, &s, format, arg);
 }
 
-int sscanf_(const char *s, const char* format, ...) {
+int sscanf_(const char *s, const char *format, ...) {
     int r;
     va_list va;
     va_start(va, format);
@@ -1271,13 +1330,13 @@ int sscanf_(const char *s, const char* format, ...) {
     return r;
 }
 
-int vfctscanf_(int (*getch)(void* data), void (*ungetch)(int c, void* data),
-                void* data, const char* format, va_list arg) {
+int vfctscanf_(int (*getch)(void *data), void (*ungetch)(int c, void *data),
+                void *data, const char *format, va_list arg) {
     return iscanf_(getch, ungetch, data, format, arg);
 }
 
-int fctscanf_(int (*getch)(void* data), void (*ungetch)(int c, void* data),
-                void* data, const char* format, ...) {
+int fctscanf_(int (*getch)(void *data), void (*ungetch)(int c, void *data),
+                void *data, const char *format, ...) {
     int r;
     va_list va;
     va_start(va, format);

@@ -53,19 +53,19 @@ extern "C" {
 #define ATTR_vfctscanf
 #endif
 
-ATTR_scanf int scanf_(const char* format, ...);
-ATTR_sscanf int sscanf_(const char *s, const char* format, ...);
-ATTR_spscanf int spscanf_(const char **sp, const char* format, ...);
-ATTR_fctscanf int fctscanf_(int (*getch)(void* data),
-                         void (*ungetch)(int c, void* data),
-                         void* data, const char* format, ...);
+ATTR_scanf int scanf_(const char *format, ...);
+ATTR_sscanf int sscanf_(const char *s, const char *format, ...);
+ATTR_spscanf int spscanf_(const char **sp, const char *format, ...);
+ATTR_fctscanf int fctscanf_(int (*getch)(void *data),
+                         void (*ungetch)(int c, void *data),
+                         void *data, const char *format, ...);
 
-ATTR_vscanf int vscanf_(const char* format, va_list arg);
-ATTR_vsscanf int vsscanf_(const char *s, const char* format, va_list arg);
-ATTR_vspscanf int vspscanf_(const char **sp, const char* format, va_list arg);
-ATTR_vfctscanf int vfctscanf_(int (*getch)(void* data),
-                              void (*ungetch)(int c, void* data),
-                              void* data, const char* format, va_list arg);
+ATTR_vscanf int vscanf_(const char *format, va_list arg);
+ATTR_vsscanf int vsscanf_(const char *s, const char *format, va_list arg);
+ATTR_vspscanf int vspscanf_(const char **sp, const char *format, va_list arg);
+ATTR_vfctscanf int vfctscanf_(int (*getch)(void *data),
+                              void (*ungetch)(int c, void *data),
+                              void *data, const char *format, va_list arg);
 
 int getch_(void);
 void ungetch_(int);
