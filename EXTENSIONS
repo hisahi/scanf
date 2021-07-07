@@ -46,7 +46,7 @@ scnext_ is well-defined if and only if all of the following conditions are met:
   string or buffer in question.
 - *buffer is used as the "next character to process". The posterior *buffer
   should contain the last character read but not yet processed. For example,
-  when reading two characters, from the stream, the following is well-defined
+  when reading two characters from the stream, the following is well-defined
   (assuming no EOF occurs before the last call to getch):
         int next = *buffer;
         int character1 = next;

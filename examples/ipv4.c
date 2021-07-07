@@ -84,15 +84,16 @@ int rescanf(int (*getch)(void *data), void *data, int *next,
 /* IPv4: %!I4 */
 int scnext_(int (*getch)(void *data), void *data, const char **format,
             int *buffer, int length, int nostore, void *destination) {
+    const char *f = *format;
     int next = *buffer;
     int ret = 0;
-    const char *f = *format;
 
     if (f[0] == 'I' && f[1] == '4') {
         unsigned char i1, i2, i3, i4;
+        /* use rescanf to call scanf in scnext_ */
         int r = rescanf(getch, data, &next, "%hhu.%hhu.%hhu.%hhu",
                         &i1, &i2, &i3, &i4);
-        f += 2;
+        f += 2; /* consume I4 in format string */
         if (r < 0)
             ret = r; /* input error */
         else if (r < 4)
@@ -100,8 +101,8 @@ int scnext_(int (*getch)(void *data), void *data, const char **format,
         else if (!nostore) {
             uint32_t ip = (i1 << 24) | (i2 << 16) | (i3 << 8) | (i4);
             *(uint32_t *)destination = ip;
-            ret = 0; /* OK */
         }
+        ret = 0; /* OK */
     } else
         ret = 1; /* unknown specifier, matching error */
 
