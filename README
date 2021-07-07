@@ -79,9 +79,9 @@ your program and implement getch_ and ungetch_ as documented above. You may
 also want to look at the defines below to customize your build.
 
 Defines:
-    SCANF_DISABLE_SUPPORT_FLOAT (default: undefined)
+    SCANF_DISABLE_SUPPORT_FLOAT (default: undefined = 0)
         Define as 1 to disable floating-point support
-    SCANF_DISABLE_SUPPORT_LONG_LONG (default: 1, or undefined if C99)
+    SCANF_DISABLE_SUPPORT_LONG_LONG (default: 1, or undefined = 0 if C99)
         Define as 1 to disable long long support
     SCANF_INTERNAL_CTYPE (default: 1 if freestanding impl detected, else 0)
         Define as 1 to use internal ctype functions instead of including
@@ -101,7 +101,7 @@ Defines:
         Define as 1 to enable INFINITY/NAN support. Macros called INFINITY
         and NAN must be defined. SCANF_INFINITE has no effect if
         SCANF_DISABLE_SUPPORT_FLOAT is defined to be true.
-    SCANF_SSCANF_ONLY (default: undefined)
+    SCANF_SSCANF_ONLY (default: undefined = 0)
         Replaces scanf and vscanf with stubs that always return EOF, leaving
         only (v)(s/fct)scanf defined. This way, getch_ and ungetch_ don't need
         to be defined if you only want to scan strings.
@@ -118,7 +118,7 @@ Defines:
     SCANF_SECURE (default: 0)
         Fails (as if by invalid input) if a %s or %[ format specifier does not
         specify a maximum length/width.
-    SCANF_EXTENSIONS (default: 1)
+    SCANF_EXTENSIONS (default: undefined = 0)
         Enables the extension engine. See EXTENSIONS.
 
 You can also redefine EOF for scanf.c; by default it is defined as -1.
