@@ -387,7 +387,7 @@ INLINE_IF_ASCII int F_(ctodn_)(CINT c) {
     case C_('7'): return 7;
     case C_('8'): return 8;
     case C_('9'): return 9;
-    default:  return -1;
+    default:      return -1;
     }
 #endif
 }
@@ -405,7 +405,7 @@ INLINE_IF_ASCII int F_(ctoon_)(CINT c) {
     case C_('5'): return 5;
     case C_('6'): return 6;
     case C_('7'): return 7;
-    default:  return -1;
+    default:      return -1;
     }
 #endif
 }
@@ -435,7 +435,7 @@ static int F_(ctoxn_)(CINT c) {
     case C_('D'): case C_('d'): return 13;
     case C_('E'): case C_('e'): return 14;
     case C_('F'): case C_('f'): return 15;
-    default:  return -1;
+    default:      return -1;
     }
 #endif
 }
@@ -448,7 +448,7 @@ INLINE_IF_ASCII int F_(ctobn_)(CINT c) {
     switch (c) {
     case C_('0'): return 0;
     case C_('1'): return 1;
-    default:  return -1;
+    default:      return -1;
     }
 #endif
 }
@@ -779,7 +779,7 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
                     if (!ovf) {
                         maxlen *= 10;
                         if (maxlen < pr) {
-                            maxlen = (size_t)UINTMAX_MAX;
+                            maxlen = SIZE_MAX;
                             ovf = 1;
                         } else {
                             pr = maxlen;
