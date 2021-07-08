@@ -414,7 +414,7 @@ static int F_(ctoxn_)(CINT c) {
 #if SCANF_ASCII
     if (c >= C_('a'))
         return c - C_('a') + 10;
-    else if (c >= 'A')
+    else if (c >= C_('A'))
         return c - C_('A') + 10;
     return c - C_('0');
 #else
@@ -476,12 +476,12 @@ static int F_(ctorn_)(CINT c, int b) {
 #if SCANF_INTERNAL_CTYPE
 static int F_(isspace)(CINT c) {
     switch (c) {
-    case ' ':
-    case '\t':
-    case '\n':
-    case '\v':
-    case '\f':
-    case '\r':
+    case C_(' '):
+    case C_('\t'):
+    case C_('\n'):
+    case C_('\v'):
+    case C_('\f'):
+    case C_('\r'):
         return 1;
     }
     return 0;
@@ -791,7 +791,7 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
             }
 
 #if SCANF_EXTENSIONS
-            if (*f == '!') {
+            if (*f == C_('!')) {
                 const CHAR *sf = (const CHAR *)(f + 1);
                 BOOL hadlen = maxlen != 0;
                 struct scanf_ext_tmp tmp;
@@ -1298,7 +1298,7 @@ got_f_result:
             } /* =========== READ FLOAT =========== */
                 break;
 #endif /* SCANF_DISABLE_SUPPORT_FLOAT */
-            case 'c': 
+            case C_('c'): 
             { /* =========== READ CHAR =========== */
                 CHAR *outp;
 #if SCANF_WIDE_CONVERT
@@ -1375,7 +1375,7 @@ got_f_result:
 #endif /* SCANF_WIDE */
 #endif /* SCANF_WIDE_CONVERT */
             } /* =========== READ CHAR =========== */
-            case 's': 
+            case C_('s'): 
             { /* =========== READ STR =========== */
                 CHAR *outp;
 #if SCANF_WIDE_CONVERT
@@ -1467,7 +1467,7 @@ got_f_result:
 #endif /* SCANF_WIDE */
 #endif /* SCANF_WIDE_CONVERT */
             } /* =========== READ STR =========== */
-            case '[':
+            case C_('['):
             { /* =========== READ SCANSET =========== */
                 CHAR *outp;
                 BOOL invert = 0;
