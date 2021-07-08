@@ -715,28 +715,24 @@ int scanf_ext_getch_(void *data) {
 #if !SCANF_DISABLE_SUPPORT_SCANSET && (!SCANF_FAST_SCANSET || SCANF_WIDE)
 
 BOOL F_(inscan_)(const UCHAR *begin, const UCHAR *end, UCHAR c) {
-    BOOL found = 0, hyphen = 0;
+    BOOL hyphen = 0;
     UCHAR prev = 0, f;
     const UCHAR *p = begin;
     while (p < end) {
         f = *p++;
         if (hyphen) {
-            if (prev <= c && c <= f) {
-                found = 1;
-                break;
-            }
+            if (prev <= c && c <= f)
+                return 1;
             hyphen = 0;
             prev = f;
         } else if (f == C_('-') && prev) {
             hyphen = 1;
-        } else if (f == c) {
-            found = 1;
-            break;
-        } else
+        } else if (f == c)
+            return 1;
+        else
             prev = f;
     }
-    if (hyphen && c == C_('-')) found = 1;
-    return found;
+    return hyphen && c == C_('-');
 }
 
 #endif
@@ -762,10 +758,6 @@ enum dlength { LN_, LN_hh, LN_h, LN_l, LN_ll, LN_L, LN_j, LN_z, LN_t };
 
 #define vLNa_(x) LN_##x
 #define vLN_(x) vLNa_(x)
-#endif
-
-#undef GOT_EOF
-#define GOT_EOF() (IS_EOF(next))
 
 #if PTRDIFF_MAX_COMPUTE
 static const ptrdiff_t ptrdiff_max_ = ((ptrdiff_t)                             \
@@ -783,6 +775,10 @@ static const ptrdiff_t ptrdiff_min_ = (ptrdiff_t)                              \
                 : (~(intmax_t)-1 > ~(intmax_t)-2)                              \
                     ? -(PTRDIFF_MAX) : -(PTRDIFF_MAX) + ~(intmax_t)0);
 #endif
+#endif /* SCANF_REPEAT */
+
+#undef GOT_EOF
+#define GOT_EOF() (IS_EOF(next))
 
 static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
                        void *p, const CHAR *ff, va_list va) {
@@ -864,9 +860,9 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
 
             /* nostore */
             if (*f == C_('*')) {
-                ++f;
                 nostore = 1;
                 dst = NULL;
+                ++f;
             } else {
                 nostore = 0;
                 dst = va_arg(va, void *);
