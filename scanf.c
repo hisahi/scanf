@@ -1773,10 +1773,12 @@ int wscanf_(const WCHAR *format, ...) {
 #else /* SCANF_SSCANF_ONLY */
 
 static WINT getwchw_(void *arg) {
+    (void)arg;
     return getwch_();
 }
 
 static void ungetwchw_(WINT c, void *arg) {
+    (void)arg;
     ungetwch_(c);
 }
 
