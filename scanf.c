@@ -503,7 +503,7 @@ INLINE int F_(isdigit)(CINT c) {
 
 #if SCANF_INFINITE
 #if SCANF_ASCII
-INLINE int F_(isalpha)(CINT c) {
+static int F_(isalpha)(CINT c) {
     return (C_('A') <= c && c <= C_('Z')) || (C_('a') <= c && c <= C_('z'));
 }
 
@@ -511,7 +511,7 @@ INLINE CINT F_(tolower)(CINT c) {
     return F_(isalpha)(c) ? c | 0x20 : c;
 }
 #else
-INLINE int F_(isalpha)(CINT c) {
+static int F_(isalpha)(CINT c) {
     switch (c) {
     case _C('A'): case _C('N'): case _C('a'): case _C('n'):
     case _C('B'): case _C('O'): case _C('b'): case _C('o'):
@@ -531,7 +531,7 @@ INLINE int F_(isalpha)(CINT c) {
     return 0;
 }
 
-INLINE CINT F_(tolower)(CINT c) {
+static CINT F_(tolower)(CINT c) {
     switch (c) {
     case _C('A'):   return _C('a');     case _C('N'):   return _C('n');
     case _C('B'):   return _C('b');     case _C('O'):   return _C('o');
@@ -1515,12 +1515,12 @@ got_f_result:
                     MATCH_FAILURE();
 #endif /* SCANF_WIDE_CONVERT */
                 outp = (CHAR *)dst;
-                if (!maxlen)
+                if (!maxlen) {
 #if SCANF_SECURE
-                    MATCH_FAILURE();
-#else
-                    maxlen = SIZE_MAX;
+                    if (!nostore) MATCH_FAILURE();
 #endif
+                    maxlen = SIZE_MAX;
+                }
 #if SCANF_WIDE_CONVERT
 #if SCANF_WIDE
                 if (!wide) goto rws_wn;
@@ -1619,12 +1619,12 @@ got_f_result:
                     MATCH_FAILURE();
 #endif /* SCANF_WIDE_CONVERT */
                 outp = (CHAR *)dst;
-                if (!maxlen)
+                if (!maxlen) {
 #if SCANF_SECURE
-                    MATCH_FAILURE();
-#else
-                    maxlen = SIZE_MAX;
+                    if (!nostore) MATCH_FAILURE();
 #endif
+                    maxlen = SIZE_MAX;
+                }
                 ++f;
                 if (*f == C_('^'))
                     invert = 1, ++f;
@@ -1751,7 +1751,7 @@ read_failure:
     /* if we have a leftover character, put it back into the stream */
     if (!GOT_EOF() && ungetch)
         ungetch(next, p);
-    return (tryconv && match) ? EOF : fields;
+    return tryconv && match ? EOF : fields;
 }
 
 /* =============================== *
@@ -1800,7 +1800,7 @@ int wscanf_(const WCHAR *format, ...) {
 static WINT wsscanw_(void *arg) {
     const WCHAR **p = (const WCHAR **)arg;
     const WCHAR c = *(*p)++;
-    return c ? c : EOF;
+    return c ? c : WEOF;
 }
 
 int vspwscanf_(const WCHAR **sp, const WCHAR *format, va_list arg) {
