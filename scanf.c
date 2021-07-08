@@ -1716,7 +1716,7 @@ int fctwscanf_(WINT (*getwch)(void *data),
 
 #else /* SCANF_WIDE */
 
-#if !SCANF_SSCANF_ONLY
+#if SCANF_SSCANF_ONLY
 
 int vscanf_(const char *format, va_list arg) {
     return EOF;

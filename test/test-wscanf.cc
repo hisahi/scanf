@@ -454,7 +454,7 @@ bool tests_ok() {
         1, 12, U8("привет"), "%ls", buf_wstr<21>(S("привет")));
 
     TRY_TEST("Simple wide=>narrow %ls",
-        1, 6, S("привет"), S("%s"), buf_str<21>(U8("привет")));
+        1, 6, S("привет"), S("%s"), buf_str<31>(U8("привет")));
 
     std::cout << "==========\n"
                  "  ALL OK  \n"

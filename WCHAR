@@ -19,9 +19,12 @@ You can also define these to replace wchar_t altogether:
     WINT                (default: wint_t)
     MAKE_WCHAR(c)       (default: L##c, so MAKE_WCHAR('A') => L'A')
     MAKE_WSTRING(s)     (default: L##s, so MAKE_WSTRING("ABC") => L"ABC")
+but make sure your own definitions (of getwch_, etc.) use the same types.
 
 wide.h must be provided manually, or alternatively you can pick an existing
-implementation from one of the folders under "wide" folder.
+implementation from one of the folders under "wide" folder. Note that you can
+simply include some existing wide.h before you include wscanf.h; in that case,
+you do not even need a wide.h in the same folder.
 
 SCANF_WIDE=1 requires the following two functions to be implemented:
 
@@ -43,10 +46,11 @@ SCANF_WIDE=3 also requires
 
 mbsetup_ should reset the pointed scanf_mbstate_t into its default state.
 mbrtowc_ and wcrtomb_ shall function like mbrtowc and wcrtomb, respectively, as
-described in ISO/IEC 9899:1999. (However, pwc, s nor ps will ever be NULL)
+described in ISO/IEC 9899:1999.
+(However, neither pwc, s nor ps will ever be NULL)
 
 The wide scanf function declarations are located in wscanf.h.
 
-Wide extensions are also supported with a different signature:
+Wide extensions (see EXTENSIONS) are also supported with a different signature:
 
     int scnwext_(wint_t (*getwch)(void *data), void *data, const wchar_t **format, wint_t *buffer, int length, int nostore, void *destination);

@@ -33,7 +33,9 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 extern "C" {
 #endif
 
+#ifndef WIDE_H
 #include "wide.h"
+#endif
 
 #ifndef WCHAR
 #define WCHAR wchar_t
