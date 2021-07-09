@@ -107,6 +107,8 @@ Defines:
         Define as 1 to disable long long support.
     SCANF_DISABLE_SUPPORT_SCANSET (default: undefined = 0)
         Define as 1 to disable scanset (%[) support. Using it will fail.
+    SCANF_DISABLE_SUPPORT_NIL (default: undefined = 0)
+        Define as 1 to disable reading (nil) as a valid %p value (= NULL).
     SCANF_INTERNAL_CTYPE (default: 1 if freestanding impl detected, else 0)
         Define as 1 to use internal ctype functions instead of including
         <ctype.h>. These functions match the C locale.

@@ -105,9 +105,9 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #ifndef INLINE
 #if SCANF_C99
-#define INLINE static inline
+#define INLINE inline
 #else
-#define INLINE static
+#define INLINE
 #endif
 #endif
 
@@ -118,7 +118,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #elif SCANF_C99
 #define BOOL _Bool
 #else
-#define BOOL int
+#define BOOL char
 #endif
 #endif
 
@@ -162,6 +162,14 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #else
 #define SCANF_FAST_SCANSET 0
 #endif
+#endif
+
+/* fast scanset only supported with multibyte/narrow characters */
+#undef SCANF_CAN_FAST_SCANSET
+#if SCANF_WIDE
+#define SCANF_CAN_FAST_SCANSET 0
+#else
+#define SCANF_CAN_FAST_SCANSET SCANF_FAST_SCANSET
 #endif
 
 #ifndef SCANF_NOPOW
@@ -264,7 +272,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #if SCANF_ASCII
 #define INLINE_IF_ASCII INLINE
 #else
-#define INLINE_IF_ASCII static
+#define INLINE_IF_ASCII
 #endif
 
 #ifndef EOF
@@ -378,7 +386,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *        digit  conversion        *
  * =============================== */
 
-INLINE_IF_ASCII int F_(ctodn_)(CINT c) {
+static INLINE_IF_ASCII int F_(ctodn_)(CINT c) {
 #if SCANF_ASCII
     return c - C_('0');
 #else
@@ -398,7 +406,7 @@ INLINE_IF_ASCII int F_(ctodn_)(CINT c) {
 #endif
 }
 
-INLINE_IF_ASCII int F_(ctoon_)(CINT c) {
+static INLINE_IF_ASCII int F_(ctoon_)(CINT c) {
 #if SCANF_ASCII
     return c - C_('0');
 #else
@@ -447,7 +455,7 @@ static int F_(ctoxn_)(CINT c) {
 }
 
 #if SCANF_BINARY
-INLINE_IF_ASCII int F_(ctobn_)(CINT c) {
+static INLINE_IF_ASCII int F_(ctobn_)(CINT c) {
 #if SCANF_ASCII
     return c - C_('0');
 #else
@@ -493,7 +501,7 @@ static int F_(isspace)(CINT c) {
     return 0;
 }
 
-INLINE int F_(isdigit)(CINT c) {
+static INLINE int F_(isdigit)(CINT c) {
 #if SCANF_ASCII
     return C_('0') <= c && c <= C_('9');
 #else
@@ -507,7 +515,7 @@ static int F_(isalpha)(CINT c) {
     return (C_('A') <= c && c <= C_('Z')) || (C_('a') <= c && c <= C_('z'));
 }
 
-INLINE CINT F_(tolower)(CINT c) {
+static INLINE CINT F_(tolower)(CINT c) {
     return F_(isalpha)(c) ? c | 0x20 : c;
 }
 #else
@@ -551,7 +559,7 @@ static CINT F_(tolower)(CINT c) {
 }
 #endif /* SCANF_ASCII */
 
-INLINE int F_(isalnum)(CINT c) {
+static INLINE int F_(isalnum)(CINT c) {
     return F_(isdigit)(c) || F_(isalpha)(c);
 }
 #endif /* SCANF_INFINITE */
@@ -569,7 +577,7 @@ INLINE int F_(isalnum)(CINT c) {
 #endif
 #endif
 
-INLINE int F_(isdigo_)(CINT c) {
+static INLINE int F_(isdigo_)(CINT c) {
 #if SCANF_ASCII
     return C_('0') <= c && c <= C_('7');
 #else
@@ -577,7 +585,7 @@ INLINE int F_(isdigo_)(CINT c) {
 #endif
 }
 
-INLINE int F_(isdigx_)(CINT c) {
+static INLINE int F_(isdigx_)(CINT c) {
 #if SCANF_ASCII
     return F_(isdigit)(c) || (C_('A') <= c && c <= C_('F'))
                           || (C_('a') <= c && c <= C_('f'));
@@ -587,12 +595,12 @@ INLINE int F_(isdigx_)(CINT c) {
 }
 
 #if SCANF_BINARY
-INLINE int F_(isdigb_)(CINT c) {
+static INLINE int F_(isdigb_)(CINT c) {
     return c == C_('0') || c == C_('1');
 }
 #endif
 
-INLINE int F_(isdigr_)(CINT c, int b) {
+static INLINE int F_(isdigr_)(CINT c, int b) {
     switch (b) {
     case 8:
         return F_(isdigo_)(c);
@@ -613,11 +621,11 @@ INLINE int F_(isdigr_)(CINT c, int b) {
 
 #if SCANF_CLAMP && !defined(SCANF_REPEAT)
 
-INLINE intmax_t clamps_(intmax_t m0, intmax_t v, intmax_t m1) {
+static INLINE intmax_t clamps_(intmax_t m0, intmax_t v, intmax_t m1) {
     return v < m0 ? m0 : v > m1 ? m1 : v;
 }
 
-INLINE uintmax_t clampu_(uintmax_t m0, uintmax_t v, uintmax_t m1) {
+static INLINE uintmax_t clampu_(uintmax_t m0, uintmax_t v, uintmax_t m1) {
     return v < m0 ? m0 : v > m1 ? m1 : v;
 }
 
@@ -632,7 +640,7 @@ INLINE uintmax_t clampu_(uintmax_t m0, uintmax_t v, uintmax_t m1) {
 #if !SCANF_DISABLE_SUPPORT_FLOAT
 
 #if !SCANF_NOPOW
-INLINE floatmax_t powi_(floatmax_t x, intmax_t y) {
+static INLINE floatmax_t powi_(floatmax_t x, intmax_t y) {
     return pow(x, y);
 }
 #elif SCANF_LOGN_POW
@@ -712,9 +720,9 @@ int scanf_ext_getch_(void *data) {
  *        scanset functions        *
  * =============================== */
 
-#if !SCANF_DISABLE_SUPPORT_SCANSET && (!SCANF_FAST_SCANSET || SCANF_WIDE)
+#if !SCANF_DISABLE_SUPPORT_SCANSET && !SCANF_CAN_FAST_SCANSET
 
-BOOL F_(inscan_)(const UCHAR *begin, const UCHAR *end, UCHAR c) {
+static BOOL F_(inscan_)(const UCHAR *begin, const UCHAR *end, UCHAR c) {
     BOOL hyphen = 0;
     UCHAR prev = 0, f;
     const UCHAR *p = begin;
@@ -738,18 +746,443 @@ BOOL F_(inscan_)(const UCHAR *begin, const UCHAR *end, UCHAR c) {
 #endif
 
 /* =============================== *
- *       main scanf function       *
+ *      conversion  functions      *
  * =============================== */
 
-#ifdef SCANF_REPEAT
-#undef IS_EOF
+#ifndef SCANF_REPEAT
+        /* still characters to read? (not EOF and width not exceeded) */
+#define KEEP_READING() (nowread < maxlen && !GOT_EOF())
+        /* read next char and increment counter */
+#define NEXT_CHAR(counter) (next = getch(p), ++counter)
 #endif
 
+#undef IS_EOF
 /* EOF check */
 #if SCANF_WIDE
 #define IS_EOF(c) ((c) == WEOF)
 #else
 #define IS_EOF(c) ((c) < 0)
+#endif
+
+#undef GOT_EOF
+#define GOT_EOF() (IS_EOF(next))
+
+/* convert stream to integer 
+    getch: stream read function
+    p: pointer to pass to above
+    nextc: pointer to next character in buffer
+    readin: pointer to number of characters read
+    maxlen: value that *readin should be at most
+    base: 10 for decimal, 16 for hexadecimal, etc.
+    unsign: whether the result should be unsigned
+    negative: whether there was a - sign
+    zero: if no digits, allow zero (i.e. read zero before iaton_)
+    dest: intmax_t* or uintmax_t*, where result is stored
+    
+    return value: 1 if conversion OK, 0 if not
+                  (if 0, dest guaranteed to not be modified)
+*/
+static INLINE BOOL F_(iaton_)(CINT (*getch)(void *p), void *p, CINT *nextc,
+                size_t *readin, size_t maxlen, int base, BOOL unsign,
+                BOOL negative, BOOL zero, void *dest) {
+    CINT next = *nextc;
+    size_t nowread = *readin;
+    uintmax_t r = 0, pr = 0;
+    /* read digits? overflow? */
+    BOOL digit = 0, ovf = 0;
+
+    /* skip initial zeros */
+    while (KEEP_READING() && next == C_('0')) {
+        digit = 1;
+        NEXT_CHAR(nowread);
+    }
+    /* read digits and convert to integer */
+    while (KEEP_READING() && F_(isdigr_)(next, base)) {
+        if (!ovf) {
+            digit = 1;
+            r *= base;
+            if (r < pr) {
+                ovf = 1;
+            } else {
+                pr = r;
+                r += F_(ctorn_)(next, base);
+            }
+        }
+        NEXT_CHAR(nowread);
+    }
+
+    /* if no digits read? */
+    if (digit) {
+        /* overflow detection, negation, etc. */
+        if (unsign) {
+            if (ovf)
+                r = (intmax_t)UINTMAX_MAX;
+            else if (negative)
+#if SCANF_CLAMP
+                r = 0;
+#else
+                r = (uintmax_t)-r;
+#endif
+            *(uintmax_t *)dest = r;
+        } else {
+            intmax_t sr;
+            if (ovf || (negative ? (intmax_t)r < 0
+                                 : r > (uintmax_t)INTMAX_MAX))
+                sr = negative ? INTMAX_MIN : INTMAX_MAX;
+            else {
+                sr = negative ? -(intmax_t)r : (intmax_t)r;
+            }
+            *(intmax_t *)dest = sr;
+        }
+    } else if (zero) {
+        if (unsign)
+            *(uintmax_t *)dest = 0;
+        else
+            *(intmax_t *)dest = 0;
+        digit = 1;
+    }
+
+    *nextc = next;
+    *readin = nowread;
+    return digit;
+}
+
+#if !SCANF_DISABLE_SUPPORT_FLOAT
+/* convert stream to floating point
+    getch: stream read function
+    p: pointer to pass to above
+    nextc: pointer to next character in buffer
+    readin: pointer to number of characters read
+    maxlen: value that *readin should be at most
+    hex: whether in hex mode
+    negative: whether there was a - sign
+    zero: if no digits, allow zero (i.e. read zero before iatof_)
+    dest: floatmax_t*, where result is stored
+    
+    return value: 1 if conversion OK, 0 if not
+                  (if 0, dest guaranteed to not be modified)
+*/
+static INLINE BOOL F_(iatof_)(CINT (*getch)(void *p), void *p, CINT *nextc,
+                       size_t *readin, size_t maxlen, BOOL hex, BOOL negative,
+                       BOOL zero, floatmax_t *dest) {
+    CINT next = *nextc;
+    size_t nowread = *readin;
+    floatmax_t r = 0, pr = 0;
+    /* saw dot? saw digit? was there an overflow? */
+    BOOL dot = 0, digit = 0, ovf = 0;
+    /* exponent, offset (with decimals, etc.) */
+    intmax_t exp = 0, off = 0;
+    /* how much to subtract from off with every digit */
+    int sub = 0;
+    /* base */
+    int base = hex ? 16 : 10;
+    /* exponent character */
+    CHAR expuc = hex ? 'P' : 'E', explc = hex ? 'p' : 'e';
+    
+    while (KEEP_READING() && next == C_('0')) {
+        digit = 1;
+        NEXT_CHAR(nowread);
+    }
+
+    /* read digits and convert */
+    while (KEEP_READING() && (F_(isdigr_)(next, base) ||
+                                (next == C_('.') && !dot))) {
+        if (next == C_('.'))
+            dot = 1, sub = hex ? 4 : 1;
+        else if (!ovf) {
+            digit = 1;
+            r *= base;
+            if (r > 0 && r == pr) {
+                ovf = 1;
+            } else {
+                pr = r;
+                r += F_(ctorn_)(next, base);
+                off += sub;
+            }
+        }
+        NEXT_CHAR(nowread);
+    }
+
+    if (zero && !digit)
+        digit = 1;
+        /* r == 0 should already apply */
+
+    if (digit) {
+        /* exponent? */
+        if (KEEP_READING() && (next == explc || next == expuc)) {
+            BOOL eneg = 0;
+            NEXT_CHAR(nowread);
+            if (KEEP_READING()) {
+                switch (next) {
+                case C_('-'):
+                    eneg = 1;
+                    /* fall-through */
+                case C_('+'):
+                    NEXT_CHAR(nowread);
+                }
+            }
+
+            if (!F_(iaton_)(getch, p, &next, &nowread, maxlen, 10,
+                            0, eneg, 0, &exp))
+                digit = 0;
+        }
+    }
+
+    if (digit) {
+        if (dot) {
+            intmax_t oexp = exp;
+            exp -= off;
+            if (exp > oexp) exp = INTMAX_MIN; /* underflow protection */
+        }
+
+        if (r != 0) {
+            if (exp > 0) {
+#ifdef INFINITY
+#if FLT_RADIX == 2
+                if (exp > (hex ? LDBL_MAX_EXP : LDBL_MAX_10_EXP))
+#else
+                /* FLT_RADIX > 2 means LDBL_MAX_EXP is defined as e
+                    in b^e for some b > 2; we'd need to compute
+                    LDBL_MAX_EXP * log(b) / log(2)
+                    at compile time, which is hardly an option.
+                    so instead we'll do the next best thing */
+                if (exp > (hex ? (LDBL_MAX_EXP * FLT_RADIX + 1)
+                                : LDBL_MAX_10_EXP))
+#endif
+                    r = INFINITY;
+                else
+#endif
+                    r *= (hex ? powi_(2, exp) : powi_(10, exp));
+            } else if (exp < 0) {
+#if FLT_RADIX == 2
+                if (exp < (hex ? LDBL_MIN_EXP : LDBL_MIN_10_EXP))
+#else
+                if (exp < (hex ? (LDBL_MIN_EXP * FLT_RADIX - 1)
+                                : LDBL_MIN_10_EXP))
+#endif
+                    r = 0;
+                else
+                    r /= (hex ? powi_(2, -exp) : powi_(10, -exp));
+            }
+        }
+
+        if (negative) r = -r;
+        *dest = r;
+    }
+
+    *nextc = next;
+    *readin = nowread;
+    return digit;
+}
+#endif /* !SCANF_DISABLE_SUPPORT_FLOAT */
+
+#ifndef SCANF_REPEAT
+#if !SCANF_DISABLE_SUPPORT_SCANSET
+enum iscans_type { A_CHAR, A_STRING, A_SCANSET };
+#else /* !SCANF_DISABLE_SUPPORT_SCANSET */
+enum iscans_type { A_CHAR, A_STRING };
+#endif /* !SCANF_DISABLE_SUPPORT_SCANSET */
+#endif /* SCANF_REPEAT */
+
+#if !SCANF_DISABLE_SUPPORT_SCANSET
+
+struct F_(scanset_) {
+#if SCANF_CAN_FAST_SCANSET
+    const BOOL *mask;
+#else
+    const CHAR *set_begin;
+    const CHAR *set_end;
+#endif
+    BOOL invert;
+};
+
+#define STRUCT_SCANSET struct F_(scanset_)
+
+static INLINE BOOL F_(insset_)(const struct F_(scanset_) *set, UCHAR c) {
+#if SCANF_CAN_FAST_SCANSET
+    return set->mask[c] != set->invert;
+#else
+    return F_(inscan_)(set->set_begin, set->set_end, c) != set->invert;
+#endif
+}
+
+#else /* !SCANF_DISABLE_SUPPORT_SCANSET */
+
+#define STRUCT_SCANSET void
+
+#endif /* !SCANF_DISABLE_SUPPORT_SCANSET */
+
+/* read char(s)/string from stream without char conversion
+    getch: stream read function
+    p: pointer to pass to above
+    nextc: pointer to next character in buffer
+    readin: pointer to number of characters read
+    maxlen: value that *readin should be at most
+    ctype: one of the values of iscans_type
+    set: a struct scanset_, only used with A_SCANSET
+    nostore: whether nostore was specified
+    outp: output CHAR pointer (not dereferenced if nostore=1)
+    
+    return value: 1 if conversion OK, 0 if not
+*/
+static INLINE BOOL F_(iscans_)(CINT (*getch)(void *p), void *p, CINT *nextc,
+                    size_t *readin, size_t maxlen, enum iscans_type ctype,
+#if !SCANF_DISABLE_SUPPORT_SCANSET
+                    const STRUCT_SCANSET *set,
+#endif
+                    BOOL nostore, CHAR *outp) {
+    CINT next = *nextc;
+    size_t nowread = *readin;
+
+    while (KEEP_READING()) {
+        if (ctype == A_STRING && F_(isspace)(next))
+            break;
+#if !SCANF_DISABLE_SUPPORT_SCANSET
+        if (ctype == A_SCANSET && !F_(insset_)(set, (UCHAR)next))
+            break;
+#endif /* !SCANF_DISABLE_SUPPORT_SCANSET */
+        if (!nostore) *outp++ = (CHAR)(UCHAR)next;
+        NEXT_CHAR(nowread);
+    }
+
+    *nextc = next;
+    *readin = nowread;
+    switch (ctype) {
+    case A_CHAR:
+        if (nowread < maxlen)
+            return 0;
+        break;
+    case A_STRING:
+#if !SCANF_DISABLE_SUPPORT_SCANSET
+    case A_SCANSET:
+#endif /* !SCANF_DISABLE_SUPPORT_SCANSET */
+        if (!nowread)
+            return 0;
+        if (!nostore)
+            *outp = C_('\0');
+    }
+    return 1;
+}
+
+#if SCANF_WIDE_CONVERT
+/* read char(s)/string from stream with conversion
+    getch: stream read function
+    p: pointer to pass to above
+    nextc: pointer to next character in buffer
+    readin: pointer to number of characters read
+    maxlen: value that *readin should be at most
+    ctype: one of the values of iscans_type
+    set: a struct scanset_, only used with A_SCANSET
+    nostore: whether nostore was specified
+    outp: output pointer of the other char type (not dereferenced if nostore=1)
+    
+    return value: 1 if conversion OK, 0 if not
+*/
+static INLINE BOOL F_(iscvts_)(CINT (*getch)(void *p), void *p, CINT *nextc,
+                    size_t *readin, size_t maxlen, enum iscans_type ctype,
+#if !SCANF_DISABLE_SUPPORT_SCANSET
+                    const STRUCT_SCANSET *set,
+#endif
+                    BOOL nostore,
+#if SCANF_WIDE
+                    char *outp
+#else
+                    WCHAR *outp
+#endif
+                    ) {
+    CINT next = *nextc;
+    size_t nowread = *readin, mbr;
+    scanf_mbstate_t mbstate;
+#if SCANF_WIDE
+    char tmp[MB_LEN_MAX];
+    if (nostore)
+        outp = tmp;
+#else
+    char nc;
+    WCHAR tmp;
+    if (nostore)
+        outp = &tmp;
+#endif
+
+    mbsetup_(&mbstate);
+    while (KEEP_READING()) {
+        if (ctype == A_STRING && F_(isspace)(next))
+            break;
+#if !SCANF_DISABLE_SUPPORT_SCANSET
+        if (ctype == A_SCANSET && !F_(insset_)(set, (UCHAR)next))
+            break;
+#endif /* !SCANF_DISABLE_SUPPORT_SCANSET */
+#if SCANF_WIDE
+        /* wide => narrow */
+        mbr = wcrtomb_(outp, next, &mbstate);
+        if (mbr == (size_t)(-1)) {
+            *nextc = next;
+            *readin = nowread;
+            return 0;
+        }
+        else if (mbr > 0 && !nostore)
+            outp += mbr;
+#else
+        /* narrow => wide */
+        nc = (char)next;
+        mbr = mbrtowc_(outp, &nc, 1, &mbstate);
+        if (mbr == (size_t)(-1)) {
+            *nextc = next;
+            *readin = nowread;
+            return 0;
+        }
+        else if (mbr != (size_t)(-2) && !nostore)
+            ++outp;
+#endif
+        NEXT_CHAR(nowread);
+    }
+
+    *nextc = next;
+    *readin = nowread;
+    switch (ctype) {
+    case A_CHAR:
+        if (nowread < maxlen)
+            return 0;
+        break;
+    case A_STRING:
+#if !SCANF_DISABLE_SUPPORT_SCANSET
+    case A_SCANSET:
+#endif
+        if (!nowread)
+            return 0;
+        if (!nostore)
+            *outp = 0;
+    }
+    return 1;
+}
+#endif
+
+/* =============================== *
+ *       main scanf function       *
+ * =============================== */
+
+#ifndef SCANF_REPEAT
+        /* signal input failure and exit loop */
+#define INPUT_FAILURE() do { goto read_failure; } while (0)
+        /* signal match OK */
+#define MATCH_SUCCESS() (noconv = 0)
+        /* signal match failure and exit loop */
+#define MATCH_FAILURE() do { if (!GOT_EOF()) MATCH_SUCCESS(); \
+                             INPUT_FAILURE(); } while (0)
+            /* store value to dst with cast */
+#define STORE_DST(value, T) (*(T *)(dst) = (T)(value))
+            /* store value to dst with cast and possible signed clamp */
+#if SCANF_CLAMP
+#define STORE_DSTI(v, T, minv, maxv) STORE_DST(clamps_(minv, v, maxv), T)
+#else
+#define STORE_DSTI(v, T, minv, maxv) STORE_DST(v, T)
+#endif
+            /* store value to dst with cast and possible unsigned clamp */
+#if SCANF_CLAMP
+#define STORE_DSTU(v, T, minv, maxv) STORE_DST(clampu_(minv, v, maxv), T)
+#else
+#define STORE_DSTU(v, T, minv, maxv) STORE_DST(v, T)
+#endif
 #endif
 
 #ifndef SCANF_REPEAT
@@ -777,9 +1210,6 @@ static const ptrdiff_t ptrdiff_min_ = (ptrdiff_t)                              \
 #endif
 #endif /* SCANF_REPEAT */
 
-#undef GOT_EOF
-#define GOT_EOF() (IS_EOF(next))
-
 static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
                        void *p, const CHAR *ff, va_list va) {
     /* fields = number of fields successfully read; this is the return value */
@@ -788,17 +1218,12 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
     CINT next;
     /* total characters read, returned by %n */
     size_t read_chars = 0;
-    /* whether we even tried to convert anything */
+    /* whether there were attempts to convert */
     BOOL tryconv = 0;
-    /* whether we have failed to convert anything successfully.
-       match = 0 means matching failure, match = 1 means EOF / input failure
-                                                (before any conversion) */
-    BOOL match = 1;
+    /* whether there were no conversions */
+    BOOL noconv = 1;
     const UCHAR *f = (const UCHAR *)ff;
     UCHAR c;
-#if SCANF_WIDE_CONVERT
-    scanf_mbstate_t mbstate;
-#endif
 
     /* empty format string always returns 0 */
     if (!*f) return 0;
@@ -807,34 +1232,6 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
     next = getch(p);
     /* ++read_chars; intentionally left out, otherwise %n is off by 1 */
     while ((c = *f++)) {
-#ifndef SCANF_REPEAT
-        /* still characters to read? (not EOF and width not exceeded) */
-#define KEEP_READING() (nowread < maxlen && !GOT_EOF())
-        /* read next char and increment counter */
-#define NEXT_CHAR(counter) (next = getch(p), ++counter)
-        /* signal match OK */
-#define MATCH_SUCCESS() (match = 0)
-        /* signal match failure and exit loop */
-#define MATCH_FAILURE() do { if (!GOT_EOF()) match = 0; \
-                             goto read_failure; } while (0)
-        /* signal input failure and exit loop */
-#define INPUT_FAILURE() do { goto read_failure; } while (0)
-            /* store value to dst with cast */
-#define STORE_DST(value, T) (*(T *)(dst) = (T)(value))
-            /* store value to dst with cast and possible signed clamp */
-#if SCANF_CLAMP
-#define STORE_DSTI(v, T, minv, maxv) STORE_DST(clamps_(minv, v, maxv), T)
-#else
-#define STORE_DSTI(v, T, minv, maxv) STORE_DST(v, T)
-#endif
-            /* store value to dst with cast and possible unsigned clamp */
-#if SCANF_CLAMP
-#define STORE_DSTU(v, T, minv, maxv) STORE_DST(clampu_(minv, v, maxv), T)
-#else
-#define STORE_DSTU(v, T, minv, maxv) STORE_DST(v, T)
-#endif
-#endif
-
         if (F_(isspace)(c)) {
             /* skip 0-N whitespace */
             while (!GOT_EOF() && F_(isspace)(next))
@@ -843,7 +1240,7 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
             if (GOT_EOF()) break;
             /* must match literal character */
             if (next != c) {
-                MATCH_FAILURE();
+                INPUT_FAILURE();
                 break;
             }
             NEXT_CHAR(read_chars);
@@ -973,11 +1370,13 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
                 /* skip whitespace. include in %n, but not elsewhere */
                 while (!GOT_EOF() && F_(isspace)(next))
                     NEXT_CHAR(read_chars);
+                /* fall-through */
             /* do not skip whitespace for... */
             case C_('['):
             case C_('c'):
                 tryconv = 1;
                 if (GOT_EOF()) INPUT_FAILURE();
+                /* fall-through */
             /* do not even check EOF for... */
             case C_('n'):
                 break;
@@ -992,15 +1391,15 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
                 break;
             { /* =========== READ INT =========== */
                 /* variables for reading ints */
-                /* decimal, hexadecimal, binary */
+                /* decimal, hexadecimal, octal, binary */
                 int base;
-                /* unsigned? %p? */
-                BOOL unsign, isptr;
-                /* is negative? */
-                BOOL negative;
-                /* result: i for integers, p for pointers */
+                /* is negative? unsigned? %p? */
+                BOOL negative, unsign, isptr;
+                /* result: i for signed integers, u for unsigned integers,
+                           p for pointers */
                 union {
                     intmax_t i;
+                    uintmax_t u;
                     void *p;
                 } r;
 
@@ -1012,6 +1411,7 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
                     goto storenum;
             case C_('p'): /* pointer */
                     isptr = 1;
+#if !SCANF_DISABLE_SUPPORT_NIL
                     if (next == C_('(')) { /* handle (nil) */
                         int k;
                         const CHAR *rest = S_("nil)");
@@ -1030,7 +1430,8 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
                         }
                         break;
                     }
-                    base = 10, unsign = 0, negative = 0;
+#endif /* !SCANF_DISABLE_SUPPORT_NIL */
+                    base = 10, unsign = 1, negative = 0;
                     goto readptr;
             case C_('o'): /* unsigned octal integer */
                     base = 8, unsign = 1;
@@ -1054,75 +1455,61 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
                     negative = 0;
 
                     /* sign, read even for %u */
+                    /* maxlen > 0, so this is always fine */
                     switch (next) {
                     case C_('-'):
                         negative = 1;
+                        /* fall-through */
                     case C_('+'):
                         NEXT_CHAR(nowread);
                     }
                     /* fall-through */
             readptr:
                 {
-                    intmax_t pr;
-                    /* read digits? overflow? */
-                    BOOL digit = 0, ovf = 0;
+                    BOOL zero = 0;
                     if (!maxlen) maxlen = SIZE_MAX;
-                    pr = r.i = 0;
-
+                    
                     /* detect base from string for %i and %p, skip 0x for %x */
-                    if (c == C_('i') || ICASEEQ(c, 'X', 'x') || c == C_('p')) {
+                    if (c == C_('i') || c == C_('p') || ICASEEQ(c, 'X', 'x')
+#if SCANF_BINARY
+                        || ICASEEQ(c, 'B', 'b')
+#endif
+                    ) {
                         if (KEEP_READING() && next == C_('0')) {
-                            digit = 1;
+                            zero = 1;
                             NEXT_CHAR(nowread);
                             if (KEEP_READING() && ICASEEQ(next, 'X', 'x')) {
-                                base = 16;
+                                if (base == 10)
+                                    base = 16;
+                                else if (base != 16) {
+                                    unsign ? (r.u = 0) : (r.i = 0);
+                                    goto readnumok;
+                                }
                                 NEXT_CHAR(nowread);
+#if SCANF_BINARY
+                            } else if (KEEP_READING() &&
+                                                  ICASEEQ(next, 'B', 'b')) {
+                                if (base == 10)
+                                    base = 2;
+                                else if (base != 2) {
+                                    unsign ? (r.u = 0) : (r.i = 0);
+                                    goto readnumok;
+                                }
+                                NEXT_CHAR(nowread);
+#endif
                             } else if (c == C_('i')) {
                                 base = 8;
                             }
                         }
                     }
 
-                    /* skip initial zeros */
-                    while (KEEP_READING() && next == C_('0')) {
-                        digit = 1;
-                        NEXT_CHAR(nowread);
-                    }
-                    /* read digits and convert to integer */
-                    while (KEEP_READING() && F_(isdigr_)(next, base)) {
-                        if (!ovf) {
-                            digit = 1;
-                            r.i *= base;
-                            if ((uintmax_t)r.i < (uintmax_t)pr) {
-                                ovf = 1;
-                            } else {
-                                pr = r.i;
-                                r.i += F_(ctorn_)(next, base);
-                            }
-                        }
-                        NEXT_CHAR(nowread);
-                    }
-
-                    /* if no digits read? */
-                    if (!digit)
+                    /* convert */
+                    if (!F_(iaton_)(getch, p, &next, &nowread, maxlen, base,
+                                unsign, negative, zero, unsign ? (void *)&r.u
+                                                               : (void *)&r.i))
                         MATCH_FAILURE();
 
-                    /* overflow detection, negation, etc. */
-                    if (unsign) {
-                        if (ovf)
-                            r.i = (intmax_t)UINTMAX_MAX;
-                        else if (negative)
-                            r.i = -r.i;
-                    } else {
-                        if (ovf || r.i < 0)
-                            r.i = negative ? INTMAX_MIN : INTMAX_MAX;
-                        else if (negative) {
-                            r.i = -r.i;
-                            if (r.i >= 0)
-                                r.i = INTMAX_MIN;
-                        }
-                    }
-
+            readnumok:
                     MATCH_SUCCESS();
 
                     if (nostore)
@@ -1132,20 +1519,20 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
             storenum:
                 /* store number, either as ptr, unsigned or signed */
                 if (isptr) {
-                    r.p = INT_TO_PTR(r.i);
+                    r.p = unsign ? INT_TO_PTR(r.u) : INT_TO_PTR(r.i);
             storeptr:
                     STORE_DST(r.p, void *);
                 } else {
                     switch (dlen) {
                     case LN_hh:
-                        if (unsign) STORE_DSTU(r.i, unsigned char,
+                        if (unsign) STORE_DSTU(r.u, unsigned char,
                                                0, UCHAR_MAX);
                         else        STORE_DSTI(r.i, signed char,
                                                SCHAR_MIN, SCHAR_MAX);
                         break;
 #if !SHORT_IS_INT
                     case LN_h: /* if SHORT_IS_INT, match fails => default: */
-                        if (unsign) STORE_DSTU(r.i, unsigned short,
+                        if (unsign) STORE_DSTU(r.u, unsigned short,
                                                0, USHRT_MAX);
                         else        STORE_DSTI(r.i, short,
                                                SHRT_MIN, SHRT_MAX);
@@ -1153,7 +1540,7 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
 #endif
 #ifndef INTMAXT_ALIAS
                     case LN_j:
-                        if (unsign) STORE_DSTU(r.i, uintmax_t,
+                        if (unsign) STORE_DSTU(r.u, uintmax_t,
                                                0, UINTMAX_MAX);
                         else        STORE_DSTI(r.i, intmax_t,
                                                INTMAX_MIN, INTMAX_MAX);
@@ -1161,11 +1548,27 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
 #endif
 #ifndef SIZET_ALIAS
                     case LN_z:
-                        STORE_DSTU(r.i, size_t, 0, SIZE_MAX);
+                        if (!unsign) {
+#if SCANF_CLAMP
+                            if (r.i < 0)
+                                r.u = 0;
+                            else
+#endif
+                                r.u = (uintmax_t)r.i;
+                        }
+                        STORE_DSTU(r.u, size_t, 0, SIZE_MAX);
                         break;
 #endif
 #ifndef PTRDIFFT_ALIAS
                     case LN_t:
+                        if (unsign) {
+#if SCANF_CLAMP
+                            if (r.u > (uintmax_t)INTMAX_MAX)
+                                r.i = INTMAX_MAX;
+                            else
+#endif
+                                r.i = (intmax_t)r.u;
+                        }
 #if PTRDIFF_MAX_COMPUTE
                         /* min/max are wrong, don't even try to clamp */
                         if (PTRDIFF_MIN >= PTRDIFF_MAX)
@@ -1178,7 +1581,7 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
 #if !SCANF_DISABLE_SUPPORT_LONG_LONG
                     case LN_ll:
 #if !LLONG_IS_LONG
-                        if (unsign) STORE_DSTU(r.i, unsigned long long,
+                        if (unsign) STORE_DSTU(r.u, unsigned long long,
                                                     0, ULLONG_MAX);
                         else        STORE_DSTI(r.i, long long,
                                                     LLONG_MIN, LLONG_MAX);
@@ -1187,14 +1590,14 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
 #endif /* SCANF_DISABLE_SUPPORT_LONG_LONG */
                     case LN_l:
 #if !LONG_IS_INT
-                        if (unsign) STORE_DSTU(r.i, unsigned long,
+                        if (unsign) STORE_DSTU(r.u, unsigned long,
                                                     0, ULONG_MAX);
                         else        STORE_DSTI(r.i, long,
                                                     LONG_MIN, LONG_MAX);
                         break;
 #endif
                     default:
-                        if (unsign) STORE_DSTU(r.i, unsigned,
+                        if (unsign) STORE_DSTU(r.u, unsigned,
                                                     0, UINT_MAX);
                         else        STORE_DSTI(r.i, int,
                                                     INT_MIN, INT_MAX);
@@ -1213,17 +1616,15 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
                 MATCH_FAILURE();
 #else
             { /* =========== READ FLOAT =========== */
-                floatmax_t r = 0, pr = 0;
-                intmax_t off = 0, exp = 0;
-                int base = 10, sub = 0;
-                UCHAR explc = C_('e'), expuc = C_('E');
-                /* negative? allow dot? read >0 digits? overflow? hex mode? */
-                BOOL negative = 0, dot = 0, digit = 0, ovf = 0, hex = 0;
+                floatmax_t r;
+                /* negative? allow zero? hex mode? */
+                BOOL negative = 0, zero = 0, hex = 0;
                 if (!maxlen) maxlen = SIZE_MAX;
 
                 switch (next) {
                 case C_('-'):
                     negative = 1;
+                    /* fall-through */
                 case C_('+'):
                     NEXT_CHAR(nowread);
                 }
@@ -1247,8 +1648,8 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
                                 MATCH_FAILURE();
                         }
                     }
-                    r = NAN;
-                    goto got_f_result;
+                    r = negative ? -NAN : NAN;
+                    goto storefp;
                 } else if (KEEP_READING() && ICASEEQ(next, 'I', 'i')) {
                     NEXT_CHAR(nowread);
                     if (!KEEP_READING() || !ICASEEQ(next, 'N', 'n'))
@@ -1269,135 +1670,29 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
                             NEXT_CHAR(nowread);
                         }
                     }
-                    r = INFINITY;
-                    goto got_f_result;
+                    r = negative ? -INFINITY : INFINITY;
+                    goto storefp;
                 }
 #endif /* SCANF_INFINITE */
 
                 /* 0x for hex floats */
                 if (KEEP_READING() && next == C_('0')) {
-                    digit = 1;
+                    zero = 1;
                     NEXT_CHAR(nowread);
                     if (KEEP_READING() && ICASEEQ(next, 'X', 'x')) {
-                        base = 16;
                         hex = 1;
-                        explc = C_('p'), expuc = C_('P');
                         NEXT_CHAR(nowread);
                     }
                 }
 
-                while (KEEP_READING() && next == C_('0')) {
-                    digit = 1;
-                    NEXT_CHAR(nowread);
-                }
-
-                /* read digits and convert */
-                while (KEEP_READING() && (F_(isdigr_)(next, base) ||
-                                         (next == C_('.') && !dot))) {
-                    if (next == C_('.'))
-                        dot = 1, sub = hex ? 4 : 1;
-                    else if (!ovf) {
-                        digit = 1;
-                        r *= base;
-                        if (r > 0 && r == pr) {
-                            ovf = 1;
-                        } else {
-                            pr = r;
-                            r += F_(ctorn_)(next, base);
-                            off += sub;
-                        }
-                    }
-                    NEXT_CHAR(nowread);
-                }
-                /* read no digits? */
-                if (!digit)
+                /* convert */
+                if (!F_(iatof_)(getch, p, &next, &nowread, maxlen, hex,
+                                negative, zero, &r))
                     MATCH_FAILURE();
 
-                /* exponent? */
-                if (KEEP_READING() && (next == explc || next == expuc)) {
-                    BOOL eneg = 0, edigit = 0, eovf = 0;
-                    intmax_t pe = 0;
-                    NEXT_CHAR(nowread);
-                    if (KEEP_READING()) {
-                        switch (next) {
-                        case C_('-'):
-                            eneg = 1;
-                        case C_('+'):
-                            NEXT_CHAR(nowread);
-                        }
-                    }
-
-                    /* skip initial zeros */
-                    while (KEEP_READING() && next == C_('0')) {
-                        edigit = 1;
-                        NEXT_CHAR(nowread);
-                    }
-                    /* read exp from stream */
-                    while (KEEP_READING() && F_(isdigit)(next)) {
-                        if (!eovf) {
-                            edigit = 1;
-                            exp *= 10;
-                            if ((uintmax_t)exp < (uintmax_t)pe) {
-                                eovf = 1;
-                            } else {
-                                pe = exp;
-                                exp += F_(ctodn_)(next);
-                            }
-                        }
-                        NEXT_CHAR(nowread);
-                    }
-                    if (!edigit)
-                        MATCH_FAILURE();
-                    /* overflow detection, negation, etc. */
-                    if (eovf || exp < 0)
-                        exp = eneg ? INTMAX_MIN : INTMAX_MAX;
-                    else if (eneg) {
-                        exp = -exp;
-                        if (exp >= 0)
-                            exp = INTMAX_MIN;
-                    }
-                }
-
-                if (dot) {
-                    intmax_t oexp = exp;
-                    exp -= off;
-                    if (exp > oexp) exp = INTMAX_MIN; /* underflow protection */
-                }
-
-                if (r != 0) {
-                    if (exp > 0) {
-#ifdef INFINITY
-#if FLT_RADIX == 2
-                        if (exp > (hex ? LDBL_MAX_EXP : LDBL_MAX_10_EXP))
-#else
-                        /* FLT_RADIX > 2 means LDBL_MAX_EXP is defined as e
-                           in b^e for some b > 2; we'd need to compute
-                           LDBL_MAX_EXP * log(b) / log(2)
-                           at compile time, which is hardly an option.
-                           so instead we'll do the next best thing */
-                        if (exp > (hex ? (LDBL_MAX_EXP * FLT_RADIX + 1)
-                                       : LDBL_MAX_10_EXP))
-#endif
-                            r = INFINITY;
-                        else
-#endif
-                            r *= (hex ? powi_(2, exp) : powi_(10, exp));
-                    } else if (exp < 0) {
-#if FLT_RADIX == 2
-                        if (exp < (hex ? LDBL_MIN_EXP : LDBL_MIN_10_EXP))
-#else
-                        if (exp < (hex ? (LDBL_MIN_EXP * FLT_RADIX - 1)
-                                       : LDBL_MIN_10_EXP))
-#endif
-                            r = 0;
-                        else
-                            r /= (hex ? powi_(2, -exp) : powi_(10, -exp));
-                    }
-                }
 #if SCANF_INFINITE
-got_f_result:
+            storefp:
 #endif
-                if (negative) r = -r;
                 MATCH_SUCCESS();
                 if (nostore)
                     break;
@@ -1436,66 +1731,37 @@ got_f_result:
                 if (!maxlen) maxlen = 1;
 #if SCANF_WIDE_CONVERT
 #if SCANF_WIDE
-                if (!wide) goto rwc_wn;
-#else
-                if (wide) goto rwc_nw;
+                if (!wide) { /* convert wide => narrow */
+                    if (!F_(iscvts_)(getch, p, &next, &nowread, maxlen,
+                                A_CHAR,
+#if !SCANF_DISABLE_SUPPORT_SCANSET
+                                NULL,
 #endif
+                                nostore, (char *)dst))
+                        MATCH_FAILURE();
+                } else
+#else /* SCANF_WIDE */
+                if (wide) { /* convert narrow => wide */
+                    if (!F_(iscvts_)(getch, p, &next, &nowread, maxlen,
+                                A_CHAR,
+#if !SCANF_DISABLE_SUPPORT_SCANSET
+                                NULL,
+#endif
+                                nostore, (WCHAR *)dst))
+                        MATCH_FAILURE();
+                } else
+#endif /* SCANF_WIDE */
 #endif /* SCANF_WIDE_CONVERT */
-                while (KEEP_READING()) {
-                    if (!nostore) *outp++ = (CHAR)(UCHAR)next;
-                    NEXT_CHAR(nowread);
-                }
-                if (nowread < maxlen)
+                if (!F_(iscans_)(getch, p, &next, &nowread, maxlen,
+                                A_CHAR,
+#if !SCANF_DISABLE_SUPPORT_SCANSET
+                                NULL,
+#endif
+                                nostore, outp))
                     MATCH_FAILURE();
                 if (!nostore) ++fields;
                 MATCH_SUCCESS();
                 break;
-#if SCANF_WIDE_CONVERT
-#if SCANF_WIDE
-            rwc_wn: /* %c with wc -> mb conversion */
-                {
-                    char *outc = (char *)dst;
-                    size_t mbr;
-                    char tmp[MB_LEN_MAX];
-                    if (nostore)
-                        outc = tmp;
-                    mbsetup_(&mbstate);
-                    while (KEEP_READING()) {
-                        mbr = wcrtomb_(outc, next, &mbstate);
-                        if (mbr == (size_t)(-1))
-                            MATCH_FAILURE();
-                        else if (mbr > 0 && !nostore)
-                            outc += mbr;
-                        NEXT_CHAR(nowread);
-                    }
-                    if (!nostore) ++fields;
-                    MATCH_SUCCESS();
-                    break;
-                }
-#else /* SCANF_WIDE */
-            rwc_nw: /* %c with mb -> wc conversion */
-                {
-                    WCHAR *outw = (WCHAR *)dst;
-                    size_t mbr;
-                    WCHAR tmp;
-                    if (nostore)
-                        outw = &tmp;
-                    mbsetup_(&mbstate);
-                    while (KEEP_READING()) {
-                        char nc = (char)next;
-                        mbr = mbrtowc_(outw, &nc, 1, &mbstate);
-                        if (mbr == (size_t)(-1))
-                            MATCH_FAILURE();
-                        else if (mbr != (size_t)(-2) && !nostore)
-                            ++outw;
-                        NEXT_CHAR(nowread);
-                    }
-                    if (!nostore) ++fields;
-                    MATCH_SUCCESS();
-                    break;
-                }
-#endif /* SCANF_WIDE */
-#endif /* SCANF_WIDE_CONVERT */
             } /* =========== READ CHAR =========== */
 
             case C_('s'):
@@ -1519,76 +1785,37 @@ got_f_result:
                 }
 #if SCANF_WIDE_CONVERT
 #if SCANF_WIDE
-                if (!wide) goto rws_wn;
-#else
-                if (wide) goto rws_nw;
+                if (!wide) { /* convert wide => narrow */
+                    if (!F_(iscvts_)(getch, p, &next, &nowread, maxlen,
+                                A_STRING,
+#if !SCANF_DISABLE_SUPPORT_SCANSET
+                                NULL,
 #endif
-#endif /* SCANF_WIDE_CONVERT */
-
-                while (KEEP_READING() && !F_(isspace)(next)) {
-                    if (!nostore) *outp++ = (CHAR)(UCHAR)next;
-                    NEXT_CHAR(nowread);
-                }
-                if (!nowread)
-                    MATCH_FAILURE();
-                if (!nostore) {
-                    *outp = C_('\0');
-                    ++fields;
-                }
-                MATCH_SUCCESS();
-                break;
-#if SCANF_WIDE_CONVERT
-#if SCANF_WIDE
-            rws_wn: /* %s with wc -> mb conversion */
-                {
-                    char *outc = (char *)dst;
-                    size_t mbr;
-                    char tmp[MB_LEN_MAX];
-                    if (nostore)
-                        outc = tmp;
-                    mbsetup_(&mbstate);
-                    while (KEEP_READING() && !F_(isspace)(next)) {
-                        mbr = wcrtomb_(outc, next, &mbstate);
-                        if (mbr == (size_t)(-1))
-                            MATCH_FAILURE();
-                        else if (mbr > 0 && !nostore)
-                            outc += mbr;
-                        NEXT_CHAR(nowread);
-                    }
-                    if (!nostore) {
-                        *outc = C_('\0');
-                        ++fields;
-                    }
-                    MATCH_SUCCESS();
-                    break;
-                }
+                                nostore, (char *)dst))
+                        MATCH_FAILURE();
+                } else
 #else /* SCANF_WIDE */
-            rws_nw: /* %s with mb -> wc conversion */
-                {
-                    WCHAR *outw = (WCHAR *)dst;
-                    size_t mbr;
-                    WCHAR tmp;
-                    if (nostore)
-                        outw = &tmp;
-                    mbsetup_(&mbstate);
-                    while (KEEP_READING() && !F_(isspace)(next)) {
-                        char nc = (char)next;
-                        mbr = mbrtowc_(outw, &nc, 1, &mbstate);
-                        if (mbr == (size_t)(-1))
-                            MATCH_FAILURE();
-                        else if (mbr != (size_t)(-2) && !nostore)
-                            ++outw;
-                        NEXT_CHAR(nowread);
-                    }
-                    if (!nostore) {
-                        *outw = C_('\0');
-                        ++fields;
-                    }
-                    MATCH_SUCCESS();
-                    break;
-                }
+                if (wide) { /* convert narrow => wide */
+                    if (!F_(iscvts_)(getch, p, &next, &nowread, maxlen,
+                                A_STRING,
+#if !SCANF_DISABLE_SUPPORT_SCANSET
+                                NULL,
+#endif
+                                nostore, (WCHAR *)dst))
+                        MATCH_FAILURE();
+                } else
 #endif /* SCANF_WIDE */
 #endif /* SCANF_WIDE_CONVERT */
+                if (!F_(iscans_)(getch, p, &next, &nowread, maxlen,
+                                A_STRING,
+#if !SCANF_DISABLE_SUPPORT_SCANSET
+                                NULL,
+#endif
+                                nostore, outp))
+                    MATCH_FAILURE();
+                if (!nostore) ++fields;
+                MATCH_SUCCESS();
+                break;
             } /* =========== READ STR =========== */
 
             case C_('['):
@@ -1598,13 +1825,14 @@ got_f_result:
             { /* =========== READ SCANSET =========== */
                 CHAR *outp;
                 BOOL invert = 0;
-#if SCANF_FAST_SCANSET && !SCANF_WIDE
+#if SCANF_CAN_FAST_SCANSET
                 BOOL hyphen = 0;
                 BOOL mention[UCHAR_MAX + 1] = { 0 };
                 UCHAR prev = 0, c;
 #else
                 const UCHAR *set;
 #endif
+                struct F_(scanset_) scanset;
 #if SCANF_WIDE_CONVERT
                 BOOL wide = dlen == LN_l;
 #elif SCANF_WIDE /* SCANF_WIDE_CONVERT */
@@ -1626,7 +1854,7 @@ got_f_result:
                     invert = 1, ++f;
                 if (*f == C_(']'))
                     ++f;
-#if SCANF_FAST_SCANSET && !SCANF_WIDE
+#if SCANF_CAN_FAST_SCANSET
                 /* populate mention, 0 if character not listed, 1 if it is */
                 while ((c = *f) && c != C_(']')) {
                     if (hyphen) {
@@ -1643,95 +1871,37 @@ got_f_result:
                 }
                 if (hyphen)
                     mention[C_('-')] = 1;
-#else /* SCANF_FAST_SCANSET */
+                scanset.mask = mention;
+#else /* SCANF_CAN_FAST_SCANSET */
                 set = f;
                 while (*f && *f != C_(']'))
                     ++f;
-#endif /* SCANF_FAST_SCANSET */
+                scanset.set_begin = set, scanset.set_end = f;
+#endif /* SCANF_CAN_FAST_SCANSET */
+                scanset.invert = invert;
 #if SCANF_WIDE_CONVERT
 #if SCANF_WIDE
-                if (!wide) goto rwsc_wn;
-#else
-                if (wide) goto rwsc_nw;
-#endif
-#endif
-                while (KEEP_READING()) {
-#if SCANF_FAST_SCANSET && !SCANF_WIDE
-                    if (mention[next] == invert) break;
-#else
-                    if (F_(inscan_)(set, f, next) == invert) break;
-#endif
-                    if (!nostore) *outp++ = (CHAR)(UCHAR)next;
-                    NEXT_CHAR(nowread);
-                }
-                if (!nostore) {
-                    *outp = C_('\0');
-                    ++fields;
-                }
-                MATCH_SUCCESS();
-                break;
-#if SCANF_WIDE_CONVERT
-#if SCANF_WIDE
-            rwsc_wn: /* %[ with wc -> mb conversion */
-                {
-                    char *outc = (char *)dst;
-                    size_t mbr;
-                    char tmp[MB_LEN_MAX];
-                    if (nostore)
-                        outc = tmp;
-                    mbsetup_(&mbstate);
-                    while (KEEP_READING()) {
-#if SCANF_FAST_SCANSET && !SCANF_WIDE
-                        if (mention[next] == invert) break;
-#else
-                        if (F_(inscan_)(set, f, next) == invert) break;
-#endif
-                        mbr = wcrtomb_(outc, next, &mbstate);
-                        if (mbr == (size_t)(-1))
-                            MATCH_FAILURE();
-                        else if (mbr > 0 && !nostore)
-                            outc += mbr;
-                        NEXT_CHAR(nowread);
-                    }
-                    if (!nostore) {
-                        *outc = C_('\0');
-                        ++fields;
-                    }
-                    MATCH_SUCCESS();
-                    break;
-                }
+                if (!wide) { /* convert wide => narrow */
+                    if (!F_(iscvts_)(getch, p, &next, &nowread, maxlen,
+                            A_SCANSET, &scanset, nostore, (char *)dst))
+                        MATCH_FAILURE();
+                } else
 #else /* SCANF_WIDE */
-            rwsc_nw: /* %[ with mb -> wc conversion */
-                {
-                    WCHAR *outw = (WCHAR *)dst;
-                    size_t mbr;
-                    WCHAR tmp;
-                    if (nostore)
-                        outw = &tmp;
-                    mbsetup_(&mbstate);
-                    while (KEEP_READING()) {
-                        char nc = (char)next;
-#if SCANF_FAST_SCANSET && !SCANF_WIDE
-                        if (mention[next] == invert) break;
-#else
-                        if (F_(inscan_)(set, f, next) == invert) break;
-#endif
-                        mbr = mbrtowc_(outw, &nc, 1, &mbstate);
-                        if (mbr == (size_t)(-1))
-                            MATCH_FAILURE();
-                        else if (mbr != (size_t)(-2) && !nostore)
-                            ++outw;
-                        NEXT_CHAR(nowread);
-                    }
-                    if (!nostore) {
-                        *outw = C_('\0');
-                        ++fields;
-                    }
-                    MATCH_SUCCESS();
-                    break;
-                }
+                if (wide) { /* convert narrow => wide */
+                    if (!F_(iscvts_)(getch, p, &next, &nowread, maxlen,
+                            A_SCANSET, &scanset, nostore, (WCHAR *)dst))
+                        MATCH_FAILURE();
+                } else
 #endif /* SCANF_WIDE */
 #endif /* SCANF_WIDE_CONVERT */
+                {
+                    if (!F_(iscans_)(getch, p, &next, &nowread, maxlen,
+                            A_SCANSET, &scanset, nostore, outp))
+                        MATCH_FAILURE();
+                }
+                if (!nostore) ++fields;
+                MATCH_SUCCESS();
+                break;
             } /* =========== READ SCANSET =========== */
 #endif /* SCANF_DISABLE_SUPPORT_SCANSET */
             default:
@@ -1747,7 +1917,7 @@ read_failure:
     /* if we have a leftover character, put it back into the stream */
     if (!GOT_EOF() && ungetch)
         ungetch(next, p);
-    return tryconv && match ? EOF : fields;
+    return tryconv && noconv ? EOF : fields;
 }
 
 /* =============================== *
