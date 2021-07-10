@@ -202,7 +202,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 
 /* include more stuff */
-
 #if !SCANF_INTERNAL_CTYPE
 #if SCANF_WIDE
 #include <wctype.h>
@@ -216,6 +215,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 #endif
 
+/* type & literal defines */
 #undef C_
 #undef S_
 #undef F_
@@ -666,57 +666,6 @@ static floatmax_t powi_(floatmax_t x, intmax_t y) {
 #endif /* SCANF_REPEAT */
 
 /* =============================== *
- *        extension support        *
- * =============================== */
-
-/* there should almost never be a reason to change this */
-#ifndef SCANF_EXT_CHAR
-#define SCANF_EXT_CHAR '!'
-#endif
-
-#if SCANF_EXTENSIONS
-#if SCANF_WIDE
-struct wscanf_ext_tmp {
-    WINT (*getch)(void *data);
-    void *data;
-    size_t len;
-};
-
-int scnwext_(WINT (*getwch)(void *data), void *data, const WCHAR **format,
-             WINT *buffer, int length, int nostore, void *destination);
-
-WINT wscanf_ext_getch_(void *data) {
-    struct wscanf_ext_tmp *st = (struct wscanf_ext_tmp *)data;
-    if (!st->len)
-        return WEOF;
-    else {
-        --st->len;
-        return st->getch(st->data);
-    }
-}
-#else /* SCANF_WIDE */
-struct scanf_ext_tmp {
-    int (*getch)(void *data);
-    void *data;
-    size_t len;
-};
-
-int scnext_(int (*getch)(void *data), void *data, const char **format,
-            int *buffer, int length, int nostore, void *destination);
-
-int scanf_ext_getch_(void *data) {
-    struct scanf_ext_tmp *st = (struct scanf_ext_tmp *)data;
-    if (!st->len)
-        return -1;
-    else {
-        --st->len;
-        return st->getch(st->data);
-    }
-}
-#endif /* SCANF_WIDE */
-#endif /* SCANF_EXTENSIONS */
-
-/* =============================== *
  *        scanset functions        *
  * =============================== */
 
@@ -757,17 +706,20 @@ static BOOL F_(inscan_)(const UCHAR *begin, const UCHAR *end, UCHAR c) {
 #endif
 
 #undef IS_EOF
+#undef GCEOF
 /* EOF check */
 #if SCANF_WIDE
 #define IS_EOF(c) ((c) == WEOF)
+#define GCEOF WEOF
 #else
 #define IS_EOF(c) ((c) < 0)
+#define GCEOF EOF
 #endif
 
 #undef GOT_EOF
 #define GOT_EOF() (IS_EOF(next))
 
-/* convert stream to integer 
+/* convert stream to integer
     getch: stream read function
     p: pointer to pass to above
     nextc: pointer to next character in buffer
@@ -778,7 +730,7 @@ static BOOL F_(inscan_)(const UCHAR *begin, const UCHAR *end, UCHAR c) {
     negative: whether there was a - sign
     zero: if no digits, allow zero (i.e. read zero before iaton_)
     dest: intmax_t* or uintmax_t*, where result is stored
-    
+
     return value: 1 if conversion OK, 0 if not
                   (if 0, dest guaranteed to not be modified)
 */
@@ -858,7 +810,7 @@ static INLINE BOOL F_(iaton_)(CINT (*getch)(void *p), void *p, CINT *nextc,
     negative: whether there was a - sign
     zero: if no digits, allow zero (i.e. read zero before iatof_)
     dest: floatmax_t*, where result is stored
-    
+
     return value: 1 if conversion OK, 0 if not
                   (if 0, dest guaranteed to not be modified)
 */
@@ -878,28 +830,32 @@ static INLINE BOOL F_(iatof_)(CINT (*getch)(void *p), void *p, CINT *nextc,
     int base = hex ? 16 : 10;
     /* exponent character */
     CHAR expuc = hex ? 'P' : 'E', explc = hex ? 'p' : 'e';
-    
+
     while (KEEP_READING() && next == C_('0')) {
         digit = 1;
         NEXT_CHAR(nowread);
     }
 
     /* read digits and convert */
-    while (KEEP_READING() && (F_(isdigr_)(next, base) ||
-                                (next == C_('.') && !dot))) {
-        if (next == C_('.'))
-            dot = 1, sub = hex ? 4 : 1;
-        else if (!ovf) {
-            digit = 1;
-            r *= base;
-            if (r > 0 && r == pr) {
-                ovf = 1;
-            } else {
-                pr = r;
-                r += F_(ctorn_)(next, base);
-                off += sub;
+    while (KEEP_READING()) {
+        if (F_(isdigr_)(next, base)) {
+            if (!ovf) {
+                digit = 1;
+                r *= base;
+                if (r > 0 && r == pr) {
+                    ovf = 1;
+                } else {
+                    pr = r;
+                    r += F_(ctorn_)(next, base);
+                    off += sub;
+                }
             }
-        }
+        } else if (next == C_('.')) {
+            if (dot)
+                break;
+            dot = 1, sub = hex ? 4 : 1;
+        } else
+            break;
         NEXT_CHAR(nowread);
     }
 
@@ -977,11 +933,7 @@ static INLINE BOOL F_(iatof_)(CINT (*getch)(void *p), void *p, CINT *nextc,
 #endif /* !SCANF_DISABLE_SUPPORT_FLOAT */
 
 #ifndef SCANF_REPEAT
-#if !SCANF_DISABLE_SUPPORT_SCANSET
 enum iscans_type { A_CHAR, A_STRING, A_SCANSET };
-#else /* !SCANF_DISABLE_SUPPORT_SCANSET */
-enum iscans_type { A_CHAR, A_STRING };
-#endif /* !SCANF_DISABLE_SUPPORT_SCANSET */
 #endif /* SCANF_REPEAT */
 
 #if !SCANF_DISABLE_SUPPORT_SCANSET
@@ -990,8 +942,8 @@ struct F_(scanset_) {
 #if SCANF_CAN_FAST_SCANSET
     const BOOL *mask;
 #else
-    const CHAR *set_begin;
-    const CHAR *set_end;
+    const UCHAR *set_begin;
+    const UCHAR *set_end;
 #endif
     BOOL invert;
 };
@@ -1022,7 +974,7 @@ static INLINE BOOL F_(insset_)(const struct F_(scanset_) *set, UCHAR c) {
     set: a struct scanset_, only used with A_SCANSET
     nostore: whether nostore was specified
     outp: output CHAR pointer (not dereferenced if nostore=1)
-    
+
     return value: 1 if conversion OK, 0 if not
 */
 static INLINE BOOL F_(iscans_)(CINT (*getch)(void *p), void *p, CINT *nextc,
@@ -1060,11 +1012,21 @@ static INLINE BOOL F_(iscans_)(CINT (*getch)(void *p), void *p, CINT *nextc,
             return 0;
         if (!nostore)
             *outp = C_('\0');
+#if SCANF_DISABLE_SUPPORT_SCANSET
+    default: ; /* inhibit compiler warning for missing case for enum */
+#endif
     }
     return 1;
 }
 
 #if SCANF_WIDE_CONVERT
+#undef CVTCHAR
+#if SCANF_WIDE
+#define CVTCHAR char
+#else
+#define CVTCHAR WCHAR
+#endif
+
 /* read char(s)/string from stream with conversion
     getch: stream read function
     p: pointer to pass to above
@@ -1075,7 +1037,7 @@ static INLINE BOOL F_(iscans_)(CINT (*getch)(void *p), void *p, CINT *nextc,
     set: a struct scanset_, only used with A_SCANSET
     nostore: whether nostore was specified
     outp: output pointer of the other char type (not dereferenced if nostore=1)
-    
+
     return value: 1 if conversion OK, 0 if not
 */
 static INLINE BOOL F_(iscvts_)(CINT (*getch)(void *p), void *p, CINT *nextc,
@@ -1083,13 +1045,7 @@ static INLINE BOOL F_(iscvts_)(CINT (*getch)(void *p), void *p, CINT *nextc,
 #if !SCANF_DISABLE_SUPPORT_SCANSET
                     const STRUCT_SCANSET *set,
 #endif
-                    BOOL nostore,
-#if SCANF_WIDE
-                    char *outp
-#else
-                    WCHAR *outp
-#endif
-                    ) {
+                    BOOL nostore, CVTCHAR *outp) {
     CINT next = *nextc;
     size_t nowread = *readin, mbr;
     scanf_mbstate_t mbstate;
@@ -1152,10 +1108,48 @@ static INLINE BOOL F_(iscvts_)(CINT (*getch)(void *p), void *p, CINT *nextc,
             return 0;
         if (!nostore)
             *outp = 0;
+#if SCANF_DISABLE_SUPPORT_SCANSET
+    default: ; /* inhibit compiler warning for missing case for enum */
+#endif
     }
     return 1;
 }
 #endif
+
+/* =============================== *
+ *        extension support        *
+ * =============================== */
+
+/* there should almost never be a reason to change this */
+#ifndef SCANF_EXT_CHAR
+#define SCANF_EXT_CHAR '!'
+#endif
+
+#if SCANF_EXTENSIONS
+#if SCANF_WIDE
+int scnwext_(WINT (*getwch)(void *data), void *data, const WCHAR **format,
+             WINT *buffer, int length, int nostore, void *destination);
+#else
+int scnext_(int (*getch)(void *data), void *data, const char **format,
+            int *buffer, int length, int nostore, void *destination);
+#endif
+
+struct F_(scanf_ext_tmp) {
+    CINT (*getch)(void *data);
+    void *data;
+    size_t len;
+};
+
+CINT F_(scanf_ext_getch_)(void *data) {
+    struct F_(scanf_ext_tmp) *st = (struct F_(scanf_ext_tmp) *)data;
+    if (!st->len)
+        return GCEOF;
+    else {
+        --st->len;
+        return st->getch(st->data);
+    }
+}
+#endif /* SCANF_EXTENSIONS */
 
 /* =============================== *
  *       main scanf function       *
@@ -1193,12 +1187,21 @@ enum dlength { LN_, LN_hh, LN_h, LN_l, LN_ll, LN_L, LN_j, LN_z, LN_t };
 #define vLN_(x) vLNa_(x)
 
 #if PTRDIFF_MAX_COMPUTE
+static const int signed_padding_div_ = (int)(                                  \
+        (sizeof(ptrdiff_t) > sizeof(uintmax_t) ? 1 :                           \
+            INT_MAX < UINTMAX_MAX ?                                            \
+                ((uintmax_t)1 << (CHAR_BIT * sizeof(int)))                     \
+                    / ((uintmax_t)INT_MAX + 1) :                               \
+            SHRT_MAX < UINTMAX_MAX ?                                           \
+                ((uintmax_t)1 << (CHAR_BIT * sizeof(short)))                   \
+                    / ((uintmax_t)SHRT_MAX + 1) : 2));
 static const ptrdiff_t ptrdiff_max_ = ((ptrdiff_t)                             \
         (sizeof(ptrdiff_t) > sizeof(intmax_t) ? 0 :                            \
             sizeof(ptrdiff_t) == sizeof(intmax_t)                              \
                 ? (INTMAX_MAX)                                                 \
                 : (((uintmax_t)1 <<                                            \
-                    (((CHAR_BIT) * sizeof(ptrdiff_t)) - 1)) + UINTMAX_MAX)));
+                    (((CHAR_BIT) * sizeof(ptrdiff_t))))                        \
+                    / signed_padding_div_ + UINTMAX_MAX)));
 #endif
 #if PTRDIFF_MIN_COMPUTE
 static const ptrdiff_t ptrdiff_min_ = (ptrdiff_t)                              \
@@ -1218,10 +1221,8 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
     CINT next;
     /* total characters read, returned by %n */
     size_t read_chars = 0;
-    /* whether there were attempts to convert */
-    BOOL tryconv = 0;
-    /* whether there were no conversions */
-    BOOL noconv = 1;
+    /* there were attempts to convert? there were no conversions? */
+    BOOL tryconv = 0, noconv = 1;
     const UCHAR *f = (const UCHAR *)ff;
     UCHAR c;
 
@@ -1272,8 +1273,6 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
             if (F_(isdigit)(*f)) {
                 BOOL ovf = 0;
                 size_t pr = 0;
-                while (*f == C_('0'))
-                    ++f;
                 while (F_(isdigit)(*f)) {
                     if (!ovf) {
                         maxlen *= 10;
@@ -1293,7 +1292,7 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
             if (*f == C_(SCANF_EXT_CHAR)) {
                 const CHAR *sf = (const CHAR *)(f + 1);
                 BOOL hadlen = maxlen != 0;
-                struct scanf_ext_tmp tmp;
+                struct F_(scanf_ext_tmp) tmp;
                 int ok;
 
                 if (!hadlen)
@@ -1302,10 +1301,10 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
                 tmp.data = p;
                 tmp.len = maxlen;
 #if SCANF_WIDE
-                ok = scnwext_(&wscanf_ext_getch_, &tmp, &sf, &next,
+                ok = scnwext_(&F_(scanf_ext_getch_), &tmp, &sf, &next,
                               hadlen, nostore, dst);
 #else
-                ok = scnext_(&scanf_ext_getch_, &tmp, &sf, &next,
+                ok = scnext_(&F_(scanf_ext_getch_), &tmp, &sf, &next,
                              hadlen, nostore, dst);
 #endif
                 f = (const UCHAR *)sf;
@@ -1445,14 +1444,13 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
                     base = 2, unsign = 1;
                     goto readnum;
 #endif
-            case C_('d'): /* signed decimal integer */
             case C_('u'): /* unsigned decimal integer */
+            case C_('d'): /* signed decimal integer */
             case C_('i'): /* signed decimal/hex/binary integer */
                     base = 10, unsign = c == C_('u');
                     /* fall-through */
             readnum:
-                    isptr = 0;
-                    negative = 0;
+                    isptr = 0, negative = 0;
 
                     /* sign, read even for %u */
                     /* maxlen > 0, so this is always fine */
@@ -1468,7 +1466,7 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
                 {
                     BOOL zero = 0;
                     if (!maxlen) maxlen = SIZE_MAX;
-                    
+
                     /* detect base from string for %i and %p, skip 0x for %x */
                     if (c == C_('i') || c == C_('p') || ICASEEQ(c, 'X', 'x')
 #if SCANF_BINARY
@@ -1545,7 +1543,7 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
                         else        STORE_DSTI(r.i, intmax_t,
                                                INTMAX_MIN, INTMAX_MAX);
                         break;
-#endif
+#endif /* INTMAXT_ALIAS */
 #ifndef SIZET_ALIAS
                     case LN_z:
                         if (!unsign) {
@@ -1558,7 +1556,7 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
                         }
                         STORE_DSTU(r.u, size_t, 0, SIZE_MAX);
                         break;
-#endif
+#endif /* SIZET_ALIAS */
 #ifndef PTRDIFFT_ALIAS
                     case LN_t:
                         if (unsign) {
@@ -1577,7 +1575,7 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
 #endif
                         STORE_DSTI(r.i, ptrdiff_t, PTRDIFF_MIN, PTRDIFF_MAX);
                         break;
-#endif
+#endif /* PTRDIFFT_ALIAS */
 #if !SCANF_DISABLE_SUPPORT_LONG_LONG
                     case LN_ll:
 #if !LLONG_IS_LONG
@@ -1732,25 +1730,17 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
 #if SCANF_WIDE_CONVERT
 #if SCANF_WIDE
                 if (!wide) { /* convert wide => narrow */
-                    if (!F_(iscvts_)(getch, p, &next, &nowread, maxlen,
-                                A_CHAR,
-#if !SCANF_DISABLE_SUPPORT_SCANSET
-                                NULL,
-#endif
-                                nostore, (char *)dst))
-                        MATCH_FAILURE();
-                } else
 #else /* SCANF_WIDE */
                 if (wide) { /* convert narrow => wide */
+#endif /* SCANF_WIDE */
                     if (!F_(iscvts_)(getch, p, &next, &nowread, maxlen,
                                 A_CHAR,
 #if !SCANF_DISABLE_SUPPORT_SCANSET
                                 NULL,
 #endif
-                                nostore, (WCHAR *)dst))
+                                nostore, (CVTCHAR *)dst))
                         MATCH_FAILURE();
                 } else
-#endif /* SCANF_WIDE */
 #endif /* SCANF_WIDE_CONVERT */
                 if (!F_(iscans_)(getch, p, &next, &nowread, maxlen,
                                 A_CHAR,
@@ -1786,25 +1776,17 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
 #if SCANF_WIDE_CONVERT
 #if SCANF_WIDE
                 if (!wide) { /* convert wide => narrow */
-                    if (!F_(iscvts_)(getch, p, &next, &nowread, maxlen,
-                                A_STRING,
-#if !SCANF_DISABLE_SUPPORT_SCANSET
-                                NULL,
-#endif
-                                nostore, (char *)dst))
-                        MATCH_FAILURE();
-                } else
 #else /* SCANF_WIDE */
                 if (wide) { /* convert narrow => wide */
+#endif /* SCANF_WIDE */
                     if (!F_(iscvts_)(getch, p, &next, &nowread, maxlen,
                                 A_STRING,
 #if !SCANF_DISABLE_SUPPORT_SCANSET
                                 NULL,
 #endif
-                                nostore, (WCHAR *)dst))
+                                nostore, (CVTCHAR *)dst))
                         MATCH_FAILURE();
                 } else
-#endif /* SCANF_WIDE */
 #endif /* SCANF_WIDE_CONVERT */
                 if (!F_(iscans_)(getch, p, &next, &nowread, maxlen,
                                 A_STRING,
@@ -1882,17 +1864,13 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
 #if SCANF_WIDE_CONVERT
 #if SCANF_WIDE
                 if (!wide) { /* convert wide => narrow */
-                    if (!F_(iscvts_)(getch, p, &next, &nowread, maxlen,
-                            A_SCANSET, &scanset, nostore, (char *)dst))
-                        MATCH_FAILURE();
-                } else
 #else /* SCANF_WIDE */
                 if (wide) { /* convert narrow => wide */
+#endif /* SCANF_WIDE */
                     if (!F_(iscvts_)(getch, p, &next, &nowread, maxlen,
-                            A_SCANSET, &scanset, nostore, (WCHAR *)dst))
+                            A_SCANSET, &scanset, nostore, (CVTCHAR *)dst))
                         MATCH_FAILURE();
                 } else
-#endif /* SCANF_WIDE */
 #endif /* SCANF_WIDE_CONVERT */
                 {
                     if (!F_(iscans_)(getch, p, &next, &nowread, maxlen,
@@ -1923,6 +1901,12 @@ read_failure:
 /* =============================== *
  *        wrapper functions        *
  * =============================== */
+
+static CINT F_(sscanw_)(void *arg) {
+    const UCHAR **p = (const UCHAR **)arg;
+    const UCHAR c = *(*p)++;
+    return c ? c : GCEOF;
+}
 
 #if SCANF_WIDE
 
@@ -1963,14 +1947,8 @@ int wscanf_(const WCHAR *format, ...) {
 
 #endif /* SCANF_SSCANF_ONLY */
 
-static WINT wsscanw_(void *arg) {
-    const WCHAR **p = (const WCHAR **)arg;
-    const WCHAR c = *(*p)++;
-    return c ? c : WEOF;
-}
-
 int vspwscanf_(const WCHAR **sp, const WCHAR *format, va_list arg) {
-    int i = F_(iscanf_)(&wsscanw_, NULL, sp, format, arg);
+    int i = F_(iscanf_)(&F_(sscanw_), NULL, sp, format, arg);
     /* ungetch = NULL, because see below */
     --*sp; /* back up by one character, even if it was EOF we want the pointer
               at the null terminator */
@@ -1987,7 +1965,7 @@ int spwscanf_(const WCHAR **sp, const WCHAR *format, ...) {
 }
 
 int vswscanf_(const WCHAR *s, const WCHAR *format, va_list arg) {
-    return F_(iscanf_)(&wsscanw_, NULL, &s, format, arg);
+    return F_(iscanf_)(&F_(sscanw_), NULL, &s, format, arg);
 }
 
 int swscanf_(const WCHAR *s, const WCHAR *format, ...) {
@@ -2055,14 +2033,8 @@ int scanf_(const char *format, ...) {
 
 #endif /* SCANF_SSCANF_ONLY */
 
-static int sscanw_(void *arg) {
-    const unsigned char **p = (const unsigned char **)arg;
-    const unsigned char c = *(*p)++;
-    return c ? c : EOF;
-}
-
 int vspscanf_(const char **sp, const char *format, va_list arg) {
-    int i = iscanf_(&sscanw_, NULL, sp, format, arg);
+    int i = iscanf_(&F_(sscanw_), NULL, sp, format, arg);
     --*sp; /* back up by one character, even if it was EOF we want the pointer
               at the null terminator */
     return i;
@@ -2078,7 +2050,7 @@ int spscanf_(const char **sp, const char *format, ...) {
 }
 
 int vsscanf_(const char *s, const char *format, va_list arg) {
-    return iscanf_(&sscanw_, NULL, &s, format, arg);
+    return iscanf_(&F_(sscanw_), NULL, &s, format, arg);
 }
 
 int sscanf_(const char *s, const char *format, ...) {
