@@ -1957,11 +1957,11 @@ static CINT F_(sscanw_)(void *arg) {
 #if SCANF_SSCANF_ONLY
 
 int vwscanf_(const WCHAR *format, va_list arg) {
-    return WEOF;
+    return *format ? EOF : 0;
 }
 
 int wscanf_(const WCHAR *format, ...) {
-    return WEOF;
+    return *format ? EOF : 0;
 }
 
 #else /* SCANF_SSCANF_ONLY */
@@ -2043,11 +2043,11 @@ int fctwscanf_(WINT (*getwch)(void *data),
 #if SCANF_SSCANF_ONLY
 
 int vscanf_(const char *format, va_list arg) {
-    return EOF;
+    return *format ? EOF : 0;
 }
 
 int scanf_(const char *format, ...) {
-    return EOF;
+    return *format ? EOF : 0;
 }
 
 #else /* SCANF_SSCANF_ONLY */
