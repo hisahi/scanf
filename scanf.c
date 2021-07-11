@@ -41,6 +41,12 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 #endif
 
+/* long long? */
+#ifndef LLONG_MAX
+#undef SCANF_DISABLE_SUPPORT_LONG_LONG
+#define SCANF_DISABLE_SUPPORT_LONG_LONG 1
+#endif
+
 /* stdint.h? */
 #ifndef SCANF_STDINT
 #if SCANF_C99
@@ -55,9 +61,23 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define __STDC_LIMIT_MACROS 1
 #endif
 #include <stdint.h>
+#if SCANF_DISABLE_SUPPORT_LONG_LONG && defined(UINTMAX_MAX)                    \
+    && UINTMAX_MAX == ULLONG_MAX
+/* replace (u)intmax_t with (unsigned) long if long long is disabled */
+#undef intmax_t
+#define intmax_t long
+#undef uintmax_t
+#define uintmax_t unsigned long
+#undef INTMAX_MIN
+#define INTMAX_MIN LONG_MIN
+#undef INTMAX_MAX
+#define INTMAX_MAX LONG_MAX
+#undef UINTMAX_MAX
+#define UINTMAX_MAX ULONG_MAX
+#endif
 #else
 /* (u)intmax_t, (U)INTMAX_(MIN_MAX) */
-#if SCANF_C99
+#if SCANF_C99 && !SCANF_DISABLE_SUPPORT_LONG_LONG
 #ifndef intmax_t
 #define intmax_t long long int
 #endif
@@ -90,12 +110,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define UINTMAX_MAX ULONG_MAX
 #endif
 #endif
-#endif
-
-/* long long? */
-#ifndef LLONG_MAX
-#undef SCANF_DISABLE_SUPPORT_LONG_LONG
-#define SCANF_DISABLE_SUPPORT_LONG_LONG 1
 #endif
 
 /* maximum precision floating point type */
@@ -284,7 +298,12 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 /* try to map size_t to unsigned long long, unsigned long, or int */
 #if defined(SIZE_MAX)
 #if defined(ULLONG_MAX) && SIZE_MAX == ULLONG_MAX
+#if SCANF_DISABLE_SUPPORT_LONG_LONG
+#define SIZET_DISABLE 1
+#pragma message("size_t == long long (disabled), so it will be disabled too")
+#else
 #define SIZET_ALIAS ll
+#endif
 #elif defined(ULONG_MAX) && SIZE_MAX == ULONG_MAX
 #define SIZET_ALIAS l
 #elif defined(UINT_MAX) && SIZE_MAX == UINT_MAX
@@ -301,7 +320,12 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 /* try to map ptrdiff_t to long long, long, or int */
 #if defined(PTRDIFF_MAX)
 #if defined(LLONG_MAX) && PTRDIFF_MAX == LLONG_MAX && PTRDIFF_MIN == LLONG_MIN
+#if SCANF_DISABLE_SUPPORT_LONG_LONG
+#define PTRDIFFT_DISABLE 1
+#pragma message("ptrdiff_t == long long (disabled), so it will be disabled too")
+#else
 #define PTRDIFFT_ALIAS ll
+#endif
 #elif defined(LONG_MAX) && PTRDIFF_MAX == LONG_MAX && PTRDIFF_MIN == LONG_MIN
 #define PTRDIFFT_ALIAS l
 #elif defined(INT_MAX) && PTRDIFF_MAX == INT_MAX && PTRDIFF_MIN == INT_MIN
@@ -312,7 +336,8 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 /* try to map intmax_t to unsigned long long or unsigned long */
 #if defined(INTMAX_MAX) && defined(UINTMAX_MAX)
-#if (defined(LLONG_MAX) && INTMAX_MAX == LLONG_MAX && INTMAX_MIN == LLONG_MIN) \
+#if !SCANF_DISABLE_SUPPORT_LONG_LONG &&                                        \
+    (defined(LLONG_MAX) && INTMAX_MAX == LLONG_MAX && INTMAX_MIN == LLONG_MIN) \
     && (defined(ULLONG_MAX) && UINTMAX_MAX == ULLONG_MAX)
 #define INTMAXT_ALIAS ll
 #elif (defined(LONG_MAX) && INTMAX_MAX == LONG_MAX && INTMAX_MIN == LONG_MIN)  \
@@ -743,22 +768,23 @@ static INLINE BOOL F_(iaton_)(CINT (*getch)(void *p), void *p, CINT *nextc,
     /* read digits? overflow? */
     BOOL digit = 0, ovf = 0;
 
+#if !SCANF_MINIMIZE
     /* skip initial zeros */
     while (KEEP_READING() && next == C_('0')) {
         digit = 1;
         NEXT_CHAR(nowread);
     }
+#endif
+
     /* read digits and convert to integer */
     while (KEEP_READING() && F_(isdigr_)(next, base)) {
         if (!ovf) {
             digit = 1;
-            r *= base;
-            if (r < pr) {
+            r = r * base + F_(ctorn_)(next, base);
+            if (pr > r)
                 ovf = 1;
-            } else {
-                pr = r;
-                r += F_(ctorn_)(next, base);
-            }
+            else
+                pr = r; 
         }
         NEXT_CHAR(nowread);
     }
@@ -831,22 +857,23 @@ static INLINE BOOL F_(iatof_)(CINT (*getch)(void *p), void *p, CINT *nextc,
     /* exponent character */
     CHAR expuc = hex ? 'P' : 'E', explc = hex ? 'p' : 'e';
 
+#if !SCANF_MINIMIZE
     while (KEEP_READING() && next == C_('0')) {
         digit = 1;
         NEXT_CHAR(nowread);
     }
+#endif
 
     /* read digits and convert */
     while (KEEP_READING()) {
         if (F_(isdigr_)(next, base)) {
             if (!ovf) {
                 digit = 1;
-                r *= base;
-                if (r > 0 && r == pr) {
+                r = r * base + F_(ctorn_)(next, base);
+                if (r > 0 && pr == r) {
                     ovf = 1;
                 } else {
                     pr = r;
-                    r += F_(ctorn_)(next, base);
                     off += sub;
                 }
             }
@@ -908,7 +935,7 @@ static INLINE BOOL F_(iatof_)(CINT (*getch)(void *p), void *p, CINT *nextc,
                     r = INFINITY;
                 else
 #endif
-                    r *= (hex ? powi_(2, exp) : powi_(10, exp));
+                    r *= powi_(hex ? 2 : 10, exp);
             } else if (exp < 0) {
 #if FLT_RADIX == 2
                 if (exp < (hex ? LDBL_MIN_EXP : LDBL_MIN_10_EXP))
@@ -918,7 +945,7 @@ static INLINE BOOL F_(iatof_)(CINT (*getch)(void *p), void *p, CINT *nextc,
 #endif
                     r = 0;
                 else
-                    r /= (hex ? powi_(2, -exp) : powi_(10, -exp));
+                    r /= powi_(hex ? 2 : 10, -exp);
             }
         }
 
@@ -1195,21 +1222,20 @@ static const int signed_padding_div_ = (int)(                                  \
             SHRT_MAX < UINTMAX_MAX ?                                           \
                 ((uintmax_t)1 << (CHAR_BIT * sizeof(short)))                   \
                     / ((uintmax_t)SHRT_MAX + 1) : 2));
-static const ptrdiff_t ptrdiff_max_ = ((ptrdiff_t)                             \
+static const ptrdiff_t ptrdiff_max_ = (ptrdiff_t)                              \
         (sizeof(ptrdiff_t) > sizeof(intmax_t) ? 0 :                            \
             sizeof(ptrdiff_t) == sizeof(intmax_t)                              \
-                ? (INTMAX_MAX)                                                 \
-                : (((uintmax_t)1 <<                                            \
-                    (((CHAR_BIT) * sizeof(ptrdiff_t))))                        \
-                    / signed_padding_div_ + UINTMAX_MAX)));
+                ? INTMAX_MAX                                                   \
+                : (((uintmax_t)1 << (CHAR_BIT * sizeof(ptrdiff_t)))            \
+                    / signed_padding_div_ + UINTMAX_MAX));
 #endif
 #if PTRDIFF_MIN_COMPUTE
 static const ptrdiff_t ptrdiff_min_ = (ptrdiff_t)                              \
         (sizeof(ptrdiff_t) > sizeof(intmax_t) ? 0 :                            \
             sizeof(ptrdiff_t) == sizeof(intmax_t)                              \
-                ? (INTMAX_MIN)                                                 \
+                ? INTMAX_MIN                                                   \
                 : (~(intmax_t)-1 > ~(intmax_t)-2)                              \
-                    ? -(PTRDIFF_MAX) : -(PTRDIFF_MAX) + ~(intmax_t)0);
+                    ? -PTRDIFF_MAX : -PTRDIFF_MAX + ~(intmax_t)0);
 #endif
 #endif /* SCANF_REPEAT */
 
@@ -1271,19 +1297,21 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
 
             /* width specifier => maxlen */
             if (F_(isdigit)(*f)) {
-                BOOL ovf = 0;
                 size_t pr = 0;
+#if !SCANF_MINIMIZE
+                /* skip initial zeros */
+                while (*f == C_('0'))
+                    ++f;
+#endif
                 while (F_(isdigit)(*f)) {
-                    if (!ovf) {
-                        maxlen *= 10;
-                        if (maxlen < pr) {
-                            maxlen = SIZE_MAX;
-                            ovf = 1;
-                        } else {
-                            pr = maxlen;
-                            maxlen += F_(ctodn_)(*f);
-                        }
-                    }
+                    maxlen = maxlen * 10 + F_(ctodn_)(*f);
+                    if (maxlen < pr) {
+                        maxlen = SIZE_MAX;
+                        while (F_(isdigit)(*f))
+                            ++f;
+                        break;
+                    } else
+                        pr = maxlen;
                     ++f;
                 }
             }
@@ -1343,19 +1371,31 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
 #endif
                 break;
             case C_('t'):
+#if PTRDIFFT_DISABLE
+                MATCH_FAILURE();
+#else
 #ifdef PTRDIFFT_ALIAS
                 dlen = vLN_(PTRDIFFT_ALIAS);
 #else
+                if (sizeof(ptrdiff_t) > sizeof(intmax_t))
+                    MATCH_FAILURE();
                 dlen = LN_t;
 #endif
                 break;
+#endif /* PTRDIFFT_DISABLE */
             case C_('z'):
+#if SIZET_DISABLE
+                MATCH_FAILURE();
+#else
 #ifdef SIZET_ALIAS
                 dlen = vLN_(SIZET_ALIAS);
 #else
+                if (sizeof(size_t) > sizeof(uintmax_t))
+                    MATCH_FAILURE();
                 dlen = LN_z;
 #endif
                 break;
+#endif /* SIZET_DISABLE */
             case C_('L'):
                 dlen = LN_L;
                 break;
@@ -1480,24 +1520,28 @@ static int F_(iscanf_)(CINT (*getch)(void *p), void (*ungetch)(CINT c, void *p),
                                 if (base == 10)
                                     base = 16;
                                 else if (base != 16) {
+                                    /* read 0b for %x, etc. */
                                     unsign ? (r.u = 0) : (r.i = 0);
                                     goto readnumok;
                                 }
                                 NEXT_CHAR(nowread);
+                                /* zero = 1. "0x" should be read as 0, because
+                                   0 is a valid strtol input, but we cannot
+                                   unread x at this point, so it'll stay read */
 #if SCANF_BINARY
                             } else if (KEEP_READING() &&
                                                   ICASEEQ(next, 'B', 'b')) {
                                 if (base == 10)
                                     base = 2;
                                 else if (base != 2) {
+                                    /* read 0x for %b, etc. */
                                     unsign ? (r.u = 0) : (r.i = 0);
                                     goto readnumok;
                                 }
                                 NEXT_CHAR(nowread);
 #endif
-                            } else if (c == C_('i')) {
+                            } else if (c == C_('i'))
                                 base = 8;
-                            }
                         }
                     }
 

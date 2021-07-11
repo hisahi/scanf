@@ -104,7 +104,9 @@ Defines:
         Define as 1 to disable floating-point support.
         %e, %f, %g and %a will simply fail.
     SCANF_DISABLE_SUPPORT_LONG_LONG (default: 1, or undefined = 0 if C99)
-        Define as 1 to disable long long support.
+        Define as 1 to disable long long support. Note that this may also
+        disable size_t, ptrdiff_t etc. if they happen to be long long (and
+        larger than long).
     SCANF_DISABLE_SUPPORT_SCANSET (default: undefined = 0)
         Define as 1 to disable scanset (%[) support. Using it will fail.
     SCANF_DISABLE_SUPPORT_NIL (default: undefined = 0)
@@ -124,6 +126,9 @@ Defines:
         Uses a O(log(n)) integer power algorithm instead of O(n).
         Should almost always work, but define to 0 if it causes issues.
         Has no effect if SCANF_DISABLE_SUPPORT_FLOAT is defined to be true.
+    SCANF_MINIMIZE (default: undefined = 0)
+        Cuts out some code that is not required, reducing code size at the
+        expense of some runtime performance.
     SCANF_INFINITE (default: 1 if C99 and SCANF_NOMATH not defined, else 0)
         Define as 1 to enable INFINITY/NAN support. Macros called INFINITY
         and NAN must be defined. SCANF_INFINITE has no effect if
